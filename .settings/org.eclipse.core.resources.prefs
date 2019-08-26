@@ -1,0 +1,9 @@
+eclipse.preferences.version=1
+encoding//parser/langLexer.py=utf-8
+encoding//parser/langParser.py=utf-8
+encoding//parser/parser.py=utf-8
+encoding//parser/test.py=utf-8
+encoding//parser/visitor.py=utf-8
+encoding//type_system/core_types.py=utf-8
+encoding//type_system/test.py=utf-8
+encoding/test.py=utf-8
