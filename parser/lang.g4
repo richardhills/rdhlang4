@@ -4,58 +4,111 @@
 grammar lang;
 
 code
-   : expression
+   : literal
    ;
 
-obj
+newObject
    : '{' pair (',' pair)* '}'
    | '{' '}'
    ;
 
 pair
-   : STRING ':' expression
+   : SYMBOL ':' expression
+   | STRING ':' expression
    ;
 
+literal
+   : STRING
+   | NUMBER
+   | objectLiteral
+   | functionLiteral
+   ;
+
+objectLiteral
+   : '{' literalPair (',' literalPair)* '}'
+   | '{' '}'
+   ;
+
+literalPair
+   : SYMBOL ':' literal
+   | STRING ':' literal
+   ;
+   
 array
    : '[' expression (',' expression)* ']'
    | '[' ']'
    ;
 
-expression
+otherExpressions
    : STRING
    | NUMBER
-   | obj
+   | newObject
    | array
    | 'true'
    | 'false'
    | 'null'
-   | functionInstantiation
-   | methodInstantiation
+   | voidType
+   | integerType
+   | stringType
+   | functionType
    | assignment
+   | returnExpression
    | dereference
-   | return
+   ;	
+
+additionSubtractionAndOtherExpressions
+   : additionSubtractionAndOtherExpressions '+' otherExpressions  # addition
+   | otherExpressions # toOtherExpressions
    ;
 
-// Past JSON
-
-functionInstantiation
-   : 'function' '(' ')' '{' (expression ';')* '}'
+expression
+   : additionSubtractionAndOtherExpressions
    ;
 
-methodInstantiation
-   : 'method' obj
+statement
+   : expression SYMBOL '=' expression # localVariableDeclaration
+   | expression # toExpression
+   ;
+
+voidType
+   : 'Void'
+   ;
+
+integerType
+   : 'Integer'
+   ;
+
+stringType
+   : 'String'
+   ;
+
+functionType
+   : 'Function' '<' expression '=>' expression '>'
+   ;
+
+functionLiteral
+   : functionLiteralWithTypes
+   | functionLiteralWithoutTypes
+   ;
+
+functionLiteralWithTypes
+   : 'function' '(' ( expression '=>' expression ) ')' '{' (statement ';')* '}'
+   ;
+
+functionLiteralWithoutTypes
+   : 'function' '(' ')' '{' (statement ';')* '}'
    ;
 
 assignment
    : dereference '=' expression
    ;
 
-dereference
-   : SYMBOL (| expression '.' SYMBOL)
+returnExpression
+   : 'return' expression
    ;
 
-return
-   : 'return' expression
+dereference
+   : SYMBOL (| expression '.' SYMBOL)
    ;
 
 SYMBOL
@@ -98,5 +151,5 @@ fragment EXP
 // \- since - means "range" inside [...]
 
 WS
-   : [ \t\n\r] + -> skip
+   : [ \t\n\r] + -> channel(HIDDEN)
    ;
