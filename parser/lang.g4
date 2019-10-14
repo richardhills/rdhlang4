@@ -39,30 +39,28 @@ array
    | '[' ']'
    ;
 
-otherExpressions
-   : STRING
-   | NUMBER
-   | newObject
-   | array
-   | 'true'
-   | 'false'
-   | 'null'
-   | voidType
-   | integerType
-   | stringType
-   | functionType
-   | assignment
-   | returnExpression
-   | dereference
-   ;	
-
-additionSubtractionAndOtherExpressions
-   : additionSubtractionAndOtherExpressions '+' otherExpressions  # addition
-   | otherExpressions # toOtherExpressions
-   ;
-
 expression
-   : additionSubtractionAndOtherExpressions
+   : expression '.' SYMBOL         # boundDereference
+   | SYMBOL                        # unboundDereference
+   | expression '(' ')'            # noParameterFunctionInvocation
+   | expression '(' expression ')' # singleParameterFunctionInvocation
+   | expression '*' expression     # multiplication
+   | expression '+' expression     # addition
+   | expression '=' expression     # assignment
+   | STRING                        # string
+   | NUMBER                        # number
+   | functionLiteral               # toFunctionLiteral
+   | newObject                     # toNewObject
+   | array                         # toArray
+   | 'true'                        # true
+   | 'false'                       # false
+   | 'null'                        # null
+   | voidType                      # toVoidType
+   | integerType                   # toIntegerType
+   | stringType                    # toStringType
+   | functionType                  # toFunctionType
+   | objectType                    # toObjectType
+   | returnExpression              # toReturnExpression
    ;
 
 statement
@@ -86,6 +84,14 @@ functionType
    : 'Function' '<' expression '=>' expression '>'
    ;
 
+objectType
+   : 'Object' '{' (propertyType ';')* '}'
+   ;
+
+propertyType
+   : expression SYMBOL
+   ;
+
 functionLiteral
    : functionLiteralWithTypes
    | functionLiteralWithoutTypes
@@ -99,16 +105,8 @@ functionLiteralWithoutTypes
    : 'function' '(' ')' '{' (statement ';')* '}'
    ;
 
-assignment
-   : dereference '=' expression
-   ;
-
 returnExpression
    : 'return' expression
-   ;
-
-dereference
-   : SYMBOL (| expression '.' SYMBOL)
    ;
 
 SYMBOL

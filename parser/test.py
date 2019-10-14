@@ -2,17 +2,18 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+from _hashlib import new
 import json
 import unittest
 from unittest.case import TestCase
 
 from parser.rdhparser import parse
 from parser.visitor import comma_op, literal_op, break_op, addition_op, \
-    object_type, function_type, prepare_op, function, new_object_op, \
-    assignment_op, invoke_ops, dereference_op, type, merge_op, function_literal, \
-    catch_op, jump_op
-import ast
-from _ast import AST
+    object_type, function_type, prepare_op, new_object_op, \
+    assignment_op, symbolic_dereference_ops, type, merge_op, function_literal, \
+    catch_op, jump_op, nop, symbolic_dereference_ops, dereference_op
+from type_system.core_types import IntegerType
+from imaplib import Literal
 
 
 class TestJSONParsing(TestCase):
@@ -88,7 +89,7 @@ class TestFunctionParsing(TestCase):
             }),
             "local_initializer": new_object_op({}),
             "code": assignment_op(
-                dereference_op("local"),
+                symbolic_dereference_ops("local"),
                 literal_op(42)
             )
         }
@@ -111,6 +112,9 @@ class TestFunctionParsing(TestCase):
             "local_initializer": new_object_op({}),
             "code": break_op("return", literal_op(42))
         }
+
+        print json.dumps(ast)
+        print json.dumps(CORRECT)
 
         self.assertEquals(ast, CORRECT)
 
@@ -195,7 +199,7 @@ class TestLocalVariables(TestCase):
                     "foo": type("Integer")
                 }),
             }),
-            "code": break_op("return", dereference_op("foo")),
+            "code": break_op("return", symbolic_dereference_ops("foo")),
             "local_initializer": new_object_op({
                 "foo": literal_op(42)
             })
@@ -218,38 +222,34 @@ class TestLocalVariables(TestCase):
                     "return": type("Void")
                 }),
                 "local": object_type({
-                    "foo": type("Integer"),
-                    "bar": type("String")
+                    "foo": type("Integer")
                 })
             }),
-            "local_initializer": merge_op(
-                catch_op("local_initialized",
-                    jump_op(prepare_op(literal_op(function_literal(
-                        type("Void"),
-                        merge_op(
-                            new_object_op({
-                                "return": type("Void")
-                            }),
-                            new_object_op({
-                                "local_initialized": object_type({
-                                    "foo": type("Integer")    
-                                })
-                            })
-                        ),
-                        object_type({
-                            "foo": type("Integer")
-                        }),
-                        new_object_op({ "foo": literal_op(42) }), [
-                            break_op("local_initialized", dereference_op("local"))
-                        ]
-                    ))),
-                    None)
-                ),
-                new_object_op({
-                    "bar": literal_op("hello")
-                })
-            )
+            "local_initializer": new_object_op({
+                "foo": literal_op(42)
+            }),
+            "code": jump_op(prepare_op(literal_op({
+                "static": new_object_op({
+                    "argument": type("Void"),
+                    "breaks": new_object_op({
+                        "return": type("Void")
+                    }),
+                    "local": object_type({
+                        "foo": type("Integer"),
+                        "bar": type("String")
+                    }),
+                }),
+                "local_initializer": merge_op(
+                    symbolic_dereference_ops("outer", "local"),
+                    new_object_op({
+                        "bar": literal_op("hello")
+                    })
+                )
+            })), nop())
         }
+
+        print json.dumps(ast)
+        print json.dumps(CORRECT)
 
         self.assertEquals(ast, CORRECT)
 
@@ -269,44 +269,36 @@ class TestLocalVariables(TestCase):
                     "return": type("Void")
                 }),
                 "local": object_type({
-                    "foo": type("Integer"),
-                    "bar": type("String")
+                    "foo": type("Integer")
                 })
             }),
-            "local_initializer": merge_op(
-                catch_op("local_initialized",
-                    jump_op(prepare_op(literal_op(function_literal(
-                        type("Void"),
-                        merge_op(
-                            new_object_op({
-                                "return": type("Void")
-                            }),
-                            new_object_op({
-                                "local_initialized": object_type({
-                                    "foo": type("Integer")    
-                                })
-                            })
-                        ),
-                        object_type({
-                            "foo": type("Integer")
-                        }),
-                        new_object_op({ "foo": literal_op(42) }),
-                        [
-                            assignment_op(dereference_op("foo"),
-                                addition_op(
-                                    dereference_op("foo"),
-                                    literal_op(3)
-                                )
-                            ),
-                            break_op("local_initialized", dereference_op("local"))
-                        ]
-                    ))),
-                    None)
+            "local_initializer": new_object_op({
+                "foo": literal_op(42)
+            }),
+            "code": comma_op([
+                assignment_op(
+                    symbolic_dereference_ops("foo"),
+                    addition_op(symbolic_dereference_ops("foo"), literal_op(3))
                 ),
-                new_object_op({
-                    "bar": literal_op("hello")
-                })
-            )
+                jump_op(prepare_op(literal_op({
+                    "static": new_object_op({
+                        "argument": type("Void"),
+                        "breaks": new_object_op({
+                            "return": type("Void")
+                        }),
+                        "local": object_type({
+                            "foo": type("Integer"),
+                            "bar": type("String")
+                        })
+                    }),
+                    "local_initializer": merge_op(
+                        symbolic_dereference_ops("outer", "local"),
+                        new_object_op({
+                            "bar": literal_op("hello")
+                        })
+                    )
+                })), nop())
+            ])
         }
 
         print json.dumps(ast)
@@ -314,11 +306,38 @@ class TestLocalVariables(TestCase):
 
         self.assertEquals(ast, CORRECT)
 
+class TestObjectTypes(TestCase):
+    def test_basic_object(self):
+        ast = parse("""
+            function(Void => Void) {
+                Object {
+                    Integer bar;
+                } foo = { bar: 5 };
+            }
+        """)
+        CORRECT = {
+            "static": new_object_op({
+                "breaks": new_object_op({
+                    "return": type("Void")
+                }),
+                "local": object_type({
+                    "foo": object_type({
+                        "bar": type("Integer")
+                    })
+                }),
+                "argument": type("Void")
+            }),
+            "local_initializer": new_object_op({
+                "foo": new_object_op({ "bar": literal_op(5) })
+            })
+        }
+        print json.dumps(ast)
+        print json.dumps(CORRECT)
+        self.assertEquals(ast, CORRECT)
 
 class TestNestedFunctions(TestCase):
 
     def test_nested_function(self):
-        return
         ast = parse("""
             function(Void => Integer) {
                 Function<Void => Integer> foo = function(Void => Integer) {
@@ -341,23 +360,20 @@ class TestNestedFunctions(TestCase):
                 }),
                 "argument": type("Void")
             }),
-            "code": comma_op([
-                assignment_op(
-                    literal_op("foo"),
-                    literal_op("compound"),
-                    prepare_op(literal_op(function(
-                        type("Void"), type("Integer"), [
-                            break_op("local_initialized", literal_op(42))
-                        ]
-                    )))
-                ),
+            "local_initializer": new_object_op({
+                "foo": prepare_op(literal_op(function_literal(
+                    type("Void"), new_object_op({ "return": type("Integer") }), object_type({}), new_object_op({}), [
+                        break_op("return", literal_op(42))
+                    ]
+                )))
+            }),
+            "code":
                 break_op("return",
-                    invoke_ops(
-                        dereference_op("foo")
-                    )
+                    catch_op("return", jump_op(symbolic_dereference_ops("foo"), nop()))
                 )
-            ])
         }
+        print json.dumps(ast)
+        print json.dumps(CORRECT)
         self.assertEquals(ast, CORRECT)
 
 

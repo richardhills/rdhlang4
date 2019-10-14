@@ -3,7 +3,7 @@ def spread_dict(*args, **kwargs):
     for arg in args:
         result.update(arg)
     result.update(kwargs)
-    return kwargs
+    return result
 
 
 class InternalMarker(object):
@@ -16,3 +16,7 @@ class InternalMarker(object):
     def __str__(self):
         return self.name
 
+
+MISSING = InternalMarker("MISSING")
+
+NO_VALUE = InternalMarker("NO_VALUE")

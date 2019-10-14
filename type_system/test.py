@@ -103,7 +103,7 @@ class TestCompileTimeChecks(TestCase):
 
         # This fails because foo and bar are now names for the same reference,
         # so foo = { "bar": 2, "baz": True } will work, breaking other_foo
-        self.assertFalse(foo.is_initializable_from(other_foo))
+        self.assertFalse(foo.is_bindable_to(other_foo))
 
 
     def test_failed_contraviant_with_extra_fields_compile_time_object_assignment(self):
@@ -308,9 +308,23 @@ class TestCompileTimeUnitTypeChecks(TestCase):
         foo = ObjectType({
             "foo": IntegerType()
         })
-        self.assertTrue(foo.is_copyable_from(ObjectType({
-            "foo": UnitType(5)
-        })))
+        other_foo = ObjectType({
+            "foo": UnitType(5, is_rev_const=True)
+        })
+        self.assertTrue(foo.is_copyable_from(other_foo))
+
+    def  test_successful_nested_assignment(self):
+        foo = ObjectType({
+            "bar": ObjectType({
+                "baz": IntegerType()
+            })
+        })
+        other_foo = ObjectType({
+            "bar": ObjectType({
+                "baz": UnitType(5, is_rev_const=True)
+            })
+        })
+        self.assertTrue(foo.is_copyable_from(other_foo))
 
 
 class TestRuntimeMutationChecks(TestCase):
