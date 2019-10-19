@@ -56,6 +56,7 @@ expression
    | 'false'                       # false
    | 'null'                        # null
    | voidType                      # toVoidType
+   | inferredType                  # toInferredType
    | integerType                   # toIntegerType
    | stringType                    # toStringType
    | functionType                  # toFunctionType
@@ -66,11 +67,17 @@ expression
 
 statement
    : expression SYMBOL '=' expression # localVariableDeclaration
+   | 'static' SYMBOL '=' expression # staticValueDeclaration
+   | 'typedef' expression SYMBOL # typedef
    | expression # toExpression
    ;
 
 voidType
    : 'Void'
+   ;
+
+inferredType
+   : 'var'
    ;
 
 integerType
@@ -103,6 +110,7 @@ functionLiteral
 
 functionArgumentAndReturns
    : '(' ')'
+   | '(' expression ')'
    | '(' expression '=>' expression ')'
    ;
 

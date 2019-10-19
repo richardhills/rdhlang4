@@ -11,7 +11,8 @@ from parser.rdhparser import parse
 from parser.visitor import comma_op, literal_op, break_op, addition_op, \
     object_type, function_type, prepare_op, new_object_op, \
     assignment_op, symbolic_dereference_ops, type, merge_op, function_literal, \
-    catch_op, jump_op, nop, symbolic_dereference_ops, dereference_op
+    catch_op, jump_op, nop, symbolic_dereference_ops, dereference_op,\
+    transform_op
 from type_system.core_types import IntegerType
 from imaplib import Literal
 
@@ -66,7 +67,7 @@ class TestFunctionParsing(TestCase):
             {
                 "static": new_object_op({
                     "breaks": new_object_op({
-                        "return": type("Void")
+                        "return": type("Inferred")
                     }),
                     "local": object_type({}),
                     "argument": type("Void"),
@@ -82,7 +83,7 @@ class TestFunctionParsing(TestCase):
         CORRECT = {
             "static": new_object_op({
                 "breaks": new_object_op({
-                    "return": type("Void")
+                    "return": type("Inferred")
                 }),
                 "local": object_type({}),
                 "argument": type("Void")
@@ -93,8 +94,6 @@ class TestFunctionParsing(TestCase):
                 literal_op(42)
             )
         }
-        print json.dumps(ast)
-        print json.dumps(CORRECT)
         self.assertEquals(ast, CORRECT)
 
     def test_simple_return_function(self):
@@ -104,7 +103,7 @@ class TestFunctionParsing(TestCase):
         CORRECT = {
             "static": new_object_op({
                 "breaks": new_object_op({
-                    "return": type("Void")
+                    "return": type("Inferred")
                 }),
                 "local": object_type({}),
                 "argument": type("Void")
@@ -112,9 +111,6 @@ class TestFunctionParsing(TestCase):
             "local_initializer": new_object_op({}),
             "code": break_op("return", literal_op(42))
         }
-
-        print json.dumps(ast)
-        print json.dumps(CORRECT)
 
         self.assertEquals(ast, CORRECT)
 
@@ -143,7 +139,7 @@ class TestFunctionParsing(TestCase):
         CORRECT = {
             "static": new_object_op({
                 "breaks": new_object_op({
-                    "return": type("Void")
+                    "return": type("Inferred")
                 }),
                 "local": object_type({}),
                 "argument": type("Void")
@@ -152,8 +148,6 @@ class TestFunctionParsing(TestCase):
             "code": addition_op(literal_op(4), literal_op(38))
         }
 
-        print json.dumps(ast)
-        print json.dumps(CORRECT)
         self.assertEquals(ast, CORRECT)
 
 
@@ -335,6 +329,28 @@ class TestObjectTypes(TestCase):
         print json.dumps(CORRECT)
         self.assertEquals(ast, CORRECT)
 
+class TestExtraStatics(TestCase):
+    def test_extra_statics(self):
+        ast = parse("""
+            function(Void => Integer) nothrow {
+                static foo = 5;
+                return foo;
+            }
+        """)
+        CORRECT = {
+            "static": new_object_op({
+                "local": object_type({}),
+                "argument": type("Void"),
+                "breaks": new_object_op({ "return": type("Integer") }),
+                "foo": literal_op(5)
+            }),
+            "local_initializer": new_object_op({}),
+            "code": transform_op(symbolic_dereference_ops(["foo"]), input="value", output="return")
+        }
+        print json.dumps(ast)
+        print json.dumps(CORRECT)
+        self.assertEquals(ast, CORRECT)
+
 class TestNestedFunctions(TestCase):
 
     def test_nested_function(self):
@@ -361,11 +377,15 @@ class TestNestedFunctions(TestCase):
                 "argument": type("Void")
             }),
             "local_initializer": new_object_op({
-                "foo": prepare_op(literal_op(function_literal(
-                    type("Void"), new_object_op({ "return": type("Integer") }), object_type({}), new_object_op({}), [
-                        break_op("return", literal_op(42))
-                    ]
-                )))
+                "foo": prepare_op(literal_op({
+                    "static": new_object_op({
+                        "argument": type("Void"),
+                        "breaks": new_object_op({ "return": type("Integer") }),
+                        "local": object_type({})
+                    }),
+                    "local_initializer": new_object_op({}),
+                    "code": break_op("return", literal_op(42))
+                }))
             }),
             "code":
                 break_op("return",

@@ -220,6 +220,15 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#toInferredType.
+    def enterToInferredType(self, ctx):
+        pass
+
+    # Exit a parse tree produced by langParser#toInferredType.
+    def exitToInferredType(self, ctx):
+        pass
+
+
     # Enter a parse tree produced by langParser#toArray.
     def enterToArray(self, ctx):
         pass
@@ -274,6 +283,24 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#staticValueDeclaration.
+    def enterStaticValueDeclaration(self, ctx):
+        pass
+
+    # Exit a parse tree produced by langParser#staticValueDeclaration.
+    def exitStaticValueDeclaration(self, ctx):
+        pass
+
+
+    # Enter a parse tree produced by langParser#typedef.
+    def enterTypedef(self, ctx):
+        pass
+
+    # Exit a parse tree produced by langParser#typedef.
+    def exitTypedef(self, ctx):
+        pass
+
+
     # Enter a parse tree produced by langParser#toExpression.
     def enterToExpression(self, ctx):
         pass
@@ -289,6 +316,15 @@ class langListener(ParseTreeListener):
 
     # Exit a parse tree produced by langParser#voidType.
     def exitVoidType(self, ctx):
+        pass
+
+
+    # Enter a parse tree produced by langParser#inferredType.
+    def enterInferredType(self, ctx):
+        pass
+
+    # Exit a parse tree produced by langParser#inferredType.
+    def exitInferredType(self, ctx):
         pass
 
 

@@ -8,7 +8,7 @@ from unittest.case import TestCase
 from executor.executor import PreparedFunction, PreparationException, \
     BreakException
 from parser.rdhparser import parse
-from type_system.core_types import ObjectType
+from type_system.core_types import ObjectType, Object, IntegerType
 
 
 class TestExecutor(TestCase):
@@ -210,6 +210,88 @@ class TestExecutor(TestCase):
         """)
         function = PreparedFunction(ast)
         self.assertEquals(function.invoke(), ((5 ** 2) ** 2) ** 2)
+
+
+    def test_monad_with_inferred_types(self):
+        ast = parse("""
+            function() {
+                var fiver = function() {
+                    return 5;
+                };
+
+                var squarer = function(Function<Void => Integer>) {
+                    return function() {
+                        return outer.argument() * outer.argument();
+                    };
+                };
+
+                return squarer(squarer(squarer(fiver)))();
+            }
+        """)
+        function = PreparedFunction(ast)
+        self.assertEquals(function.break_types, { "return": IntegerType() })
+        self.assertEquals(function.invoke(), ((5 ** 2) ** 2) ** 2)
+
+
+
+    def test_monad_with_typedef(self):
+        ast = parse("""
+            function(Void => Integer) nothrow {
+                typedef Function<Void => Integer> IntMaker;
+                IntMaker fiver = function(Void => Integer) nothrow {
+                    return 5;
+                };
+
+                typedef Function<IntMaker => IntMaker> IntMakerModifier;
+                IntMakerModifier squarer = function(IntMaker => IntMaker) nothrow {
+                    return function(Void => Integer) {
+                        return outer.argument() * outer.argument();
+                    };
+                };
+
+                return squarer(squarer(squarer(fiver)))();
+            }
+        """)
+        print json.dumps(ast)
+        function = PreparedFunction(ast)
+        self.assertEquals(function.invoke(), ((5 ** 2) ** 2) ** 2)
+
+class TestExtraStatics(TestCase):
+    def test_extra_statics(self):
+        ast = parse("""
+            function(Void => Integer) nothrow {
+                static bam = 42;
+                return bam;
+            }
+        """)
+        function = PreparedFunction(ast)
+        self.assertEquals(function.invoke(), 42)
+
+    def test_static_type(self):
+        ast = parse("""
+            function(Void => Integer) nothrow {
+                static Foo = Object { Integer bar; };
+                Foo foo = { bar: 42 };
+                return foo.bar;
+            }
+        """)
+        print json.dumps(ast)
+        function = PreparedFunction(ast)
+        self.assertEquals(function.invoke(), 42)
+
+    def test_typedef_type(self):
+        ast = parse("""
+            function(Void => Integer) nothrow {
+                typedef Object { Integer bar; } Foo;
+                Foo foo = { bar: 42 };
+                return foo.bar;
+            }
+        """)
+        print json.dumps(ast)
+        function = PreparedFunction(ast)
+        self.assertEquals(function.invoke(), 42)
+
+
 
 class TextPreparationErrors(TestCase):
     def test_invalid_code_fail_at_preparation(self):

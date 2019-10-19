@@ -9,6 +9,7 @@ from antlr4.tree.Tree import TerminalNodeImpl
 
 from parser.langVisitor import langVisitor
 from utils import spread_dict, MISSING
+from __builtin__ import True
 
 
 class ParseError(Exception):
@@ -28,6 +29,7 @@ def add_debugging(expression, ctx):
         expression["line"] = ctx.start.line
         expression["column"] = ctx.start.column
     return expression
+
 
 def new_object_op(properties, ctx=None):
     if not isinstance(properties, dict):
@@ -117,6 +119,7 @@ def jump_op(function_expression, argument_expression, ctx=None):
         code["argument"] = argument_expression
     return add_debugging(code, ctx)
 
+
 def transform_op(code_expression, ctx=None, input="value", output="value"):
     if not is_expression(code_expression):
         raise InvalidCodeError()
@@ -126,6 +129,7 @@ def transform_op(code_expression, ctx=None, input="value", output="value"):
         "input": input,
         "output": output
     }, ctx)
+
 
 def break_op(type, value, ctx=None):
     if not is_expression(value):
@@ -158,6 +162,7 @@ def addition_op(lvalue, rvalue, ctx=None):
         "rvalue": rvalue
     }, ctx)
 
+
 def multiplication_op(lvalue, rvalue, ctx=None):
     if not is_expression(lvalue) or not is_expression(rvalue):
         raise InvalidCodeError()
@@ -166,6 +171,7 @@ def multiplication_op(lvalue, rvalue, ctx=None):
         "lvalue": lvalue,
         "rvalue": rvalue,
     }, ctx)
+
 
 def assignment_op(dereference, rvalue, ctx=None):
     if not is_expression(dereference) or not is_expression(rvalue):
@@ -176,8 +182,10 @@ def assignment_op(dereference, rvalue, ctx=None):
         "rvalue": rvalue
     }, ctx)
 
+
 def context_op():
     return { "opcode": "context" }
+
 
 def dereference_op(reference, of, ctx=None):
     if not is_expression(reference) or not is_expression(of):
@@ -188,6 +196,7 @@ def dereference_op(reference, of, ctx=None):
         "of": of
     }, ctx)
 
+
 def unbound_dereference_op(reference, ctx=None):
     if not isinstance(reference, basestring):
         raise InvalidCodeError()
@@ -195,6 +204,7 @@ def unbound_dereference_op(reference, ctx=None):
         "opcode": "unbound_dereference",
         "reference": reference
     }, ctx)
+
 
 def symbolic_dereference_ops(parts, ctx=None):
     if not isinstance(parts, list):
@@ -208,13 +218,14 @@ def symbolic_dereference_ops(parts, ctx=None):
     else:
         return dereference_op(literal_op(parts[-1], ctx), symbolic_dereference_ops(parts[:-1], ctx), ctx)
 
-def function_literal(argument_type_expression, breaks_type_expression, local_type_expression, local_initializer, code_expressions, ctx=None):
+
+def function_literal(argument_type_expression, breaks_type_expression, extra_statics, local_type_expression, local_initializer, code_expressions, ctx=None):
     function_literal = {
-        "static": new_object_op({
+        "static": new_object_op(spread_dict(extra_statics, {
             "breaks": breaks_type_expression,
             "local": local_type_expression,
             "argument": argument_type_expression
-        }, ctx)
+        }), ctx)
     }
 
     if local_initializer:
@@ -243,6 +254,7 @@ def prepare_op(function_expression, ctx=None):
         "function": function_expression
     }, ctx)
 
+
 class LocalVariableDeclaration(object):
 
     def __init__(self, type, name, initial_value):
@@ -253,7 +265,17 @@ class LocalVariableDeclaration(object):
         self.initial_value = initial_value
 
 
+class StaticValueDeclaration(object):
+
+    def __init__(self, name, value):
+        self.name = name
+        if not is_expression(value):
+            raise InvalidCodeError()
+        self.value = value
+
+
 class RDHLang4Visitor(langVisitor):
+
     def __init__(self, *args, **kwargs):
         self.debug = kwargs.pop("debug", False)
         langVisitor.__init__(self, *args, **kwargs)
@@ -264,6 +286,16 @@ class RDHLang4Visitor(langVisitor):
         initialValue = self.visit(initialValue)
         name = ctx.SYMBOL().getText()
         return LocalVariableDeclaration(type, name, initialValue)
+
+    def visitStaticValueDeclaration(self, ctx):
+        value = self.visit(ctx.expression())
+        name = ctx.SYMBOL().getText()
+        return StaticValueDeclaration(name, value)
+
+    def visitTypedef(self, ctx):
+        value = self.visit(ctx.expression())
+        name = ctx.SYMBOL().getText()
+        return StaticValueDeclaration(name, value)
 
     def visitString(self, ctx):
         return literal_op(ctx.STRING().getText()[1:-1], ctx if self.debug else None)
@@ -365,6 +397,9 @@ class RDHLang4Visitor(langVisitor):
     def visitReturnExpression(self, ctx):
         return transform_op(self.visit(ctx.expression()), ctx if self.debug else None, "value", "return")
 
+    def visitInferredType(self, ctx):
+        return type("Inferred", ctx if self.debug else None)
+
     def visitVoidType(self, ctx):
         return type("Void", ctx if self.debug else None)
 
@@ -398,48 +433,80 @@ class RDHLang4Visitor(langVisitor):
         self,
         argument_type_expression,
         breaks_type_expression,
+        extra_statics,
         local_variable_types,
         local_initializer,
         code_expressions,
         ctx
     ):
         code_for_us = []
-        local_variable_declaration = None
+        local_variable_declaration = static_value_declaration = None
         code_for_remainder_function = None
+        need_remainder_function = True
 
         for index, code_expression_ctx in enumerate(code_expressions):
             code_expression = self.visit(code_expression_ctx)
-            if not isinstance(code_expression, LocalVariableDeclaration):
-                code_for_us.append(code_expression)
-            else:
+            if isinstance(code_expression, LocalVariableDeclaration):
                 local_variable_declaration = code_expression
                 code_for_remainder_function = code_expressions[index + 1:]
                 break
+            elif isinstance(code_expression, StaticValueDeclaration):
+                static_value_declaration = code_expression
+                code_for_remainder_function = code_expressions[index + 1:]
+                break
+            else:
+                code_for_us.append(code_expression)
+        else:
+            need_remainder_function = False
 
-        need_remainder_function = local_variable_declaration is not None
-        need_function_for_us = len(code_for_us) > 0 or not need_remainder_function or len(local_variable_types) > 0
+        need_function_for_us = (
+            len(code_for_us) > 0
+            or not need_remainder_function
+            or len(local_variable_types) > 0
+            or len(extra_statics) > 0
+        )
 
         if need_remainder_function:
-            remainder_function_local_variable_types = spread_dict(local_variable_types, {
-                local_variable_declaration.name: local_variable_declaration.type
-            })
+            remainder_function_local_variable_types = local_variable_types
+            new_variable_initializer = old_variables_initializer = None
 
-            new_variable_initializer = new_object_op({
-                local_variable_declaration.name: local_variable_declaration.initial_value
-            }, ctx if self.debug else None)
+            if local_variable_declaration:
+                remainder_function_local_variable_types = spread_dict(
+                    remainder_function_local_variable_types, {
+                        local_variable_declaration.name: local_variable_declaration.type
+                    }
+                )
+
+                new_variable_initializer = new_object_op({
+                    local_variable_declaration.name: local_variable_declaration.initial_value
+                }, ctx if self.debug else None)
 
             if len(local_variable_types) > 0:
-                remainder_function_local_variable_initializer = merge_op(
-                    symbolic_dereference_ops(["outer", "local"], ctx if self.debug else None),
-                    new_variable_initializer, ctx if self.debug else None
-                )
+                old_variables_initializer = symbolic_dereference_ops(["outer", "local"])
+
+            if old_variables_initializer:
+                if new_variable_initializer:
+                    remainder_function_local_variable_initializer = merge_op(
+                        old_variables_initializer,
+                        new_variable_initializer
+                    )
+                else:
+                    remainder_function_local_variable_initializer = old_variables_initializer
             else:
-                remainder_function_local_variable_initializer = new_variable_initializer
+                if new_variable_initializer:
+                    remainder_function_local_variable_initializer = new_variable_initializer
+                else:
+                    remainder_function_local_variable_initializer = new_object_op({}, None)
+
+            remainder_function_extra_statics = dict(extra_statics)
+            if static_value_declaration:
+                remainder_function_extra_statics[static_value_declaration.name] = static_value_declaration.value
 
             if need_function_for_us:
                 remainder_function = self.visit_function(
                     type("Void", ctx if self.debug else None),
                     breaks_type_expression,
+                    remainder_function_extra_statics,
                     remainder_function_local_variable_types,
                     remainder_function_local_variable_initializer,
                     code_for_remainder_function,
@@ -453,6 +520,7 @@ class RDHLang4Visitor(langVisitor):
                 remaining_code_function = self.visit_function(
                     argument_type_expression,
                     breaks_type_expression,
+                    remainder_function_extra_statics,
                     remainder_function_local_variable_types,
                     remainder_function_local_variable_initializer,
                     code_for_remainder_function,
@@ -463,6 +531,7 @@ class RDHLang4Visitor(langVisitor):
             return function_literal(
                 argument_type_expression,
                 breaks_type_expression,
+                extra_statics,
                 object_type(local_variable_types, ctx if self.debug else None),
                 local_initializer,
                 code_for_us,
@@ -491,7 +560,7 @@ class RDHLang4Visitor(langVisitor):
         return self.visit_function(
             argument_type,
             new_object_op(breaks),
-            {},
+            {}, {},
             new_object_op({}, ctx if self.debug else None),
             ctx.statement(),
             ctx if self.debug else None
@@ -504,9 +573,12 @@ class RDHLang4Visitor(langVisitor):
             argument_type, return_type = possible_argument_and_return_type
             argument_type = self.visit(argument_type)
             return_type = self.visit(return_type)
+        elif len(possible_argument_and_return_type) == 1:
+            argument_type = self.visit(possible_argument_and_return_type[0])
+            return_type = type("Inferred")
         else:
             argument_type = type("Void")
-            return_type = type("Void")
+            return_type = type("Inferred")
 
         return (argument_type, return_type)
 

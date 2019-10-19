@@ -9,12 +9,8 @@ from utils import InternalMarker, MISSING, NO_VALUE
 def infer_primitive_type(value):
     from executor.executor import PreparedFunction
 
-    if isinstance(value, int):
-        return IntegerType()
-    if isinstance(value, bool):
-        return BooleanType()
-    if isinstance(value, basestring):
-        return StringType()
+    if isinstance(value, (int, bool, basestring)):
+        return UnitType(value)
     if isinstance(value, PreparedFunction):
         return FunctionType(VoidType(), {})
     if isinstance(value, Object):
@@ -23,9 +19,8 @@ def infer_primitive_type(value):
         return VoidType()
     raise DataIntegrityError()
 
-
 def flatten_to_primitive_type(type):
-    if isinstance(type, (BooleanType, IntegerType, StringType, AnyType, VoidType)):
+    if isinstance(type, (BooleanType, IntegerType, StringType, AnyType, VoidType, UnitType)):
         return type
     if isinstance(type, ObjectType):
         return ObjectType({})
@@ -66,6 +61,9 @@ class Type(object):
     def is_copyable_from(self, other):
         raise NotImplementedError()
 
+    def replace_inferred_types(self, other):
+        return self
+
     def get_crystal_value(self):
         return MISSING
 
@@ -91,6 +89,9 @@ class IntegerType(Type):
         if isinstance(other, UnitType) and isinstance(other.value, int):
             return True
         return False
+
+    def __eq__(self, other):
+        return isinstance(other, IntegerType)
 
     def __repr__(self):
         return "IntegerType"
@@ -119,7 +120,10 @@ class AnyType(Type):
 
 class InferredType(Type):
     def is_copyable_from(self, other):
-        return False
+        return True
+
+    def replace_inferred_types(self, other):
+        return other
 
     def __repr__(self):
         return "InferredType"
@@ -236,6 +240,14 @@ class ObjectType(Type):
 #                 return False
         return True
 
+    def replace_inferred_types(self, other):
+        if not isinstance(other, ObjectType):
+            return self
+        return ObjectType({
+            property_name: property_type.replace_inferred_types(other.property_types[property_name])
+            for property_name, property_type in self.property_types.items()
+        })
+
     def get_crystal_value(self):
         return Object({
             property_name: property_type.get_crystal_value() for property_name, property_type in self.property_types.items()
@@ -257,6 +269,7 @@ class FunctionType(Type):
     def is_copyable_from(self, other):
         if not isinstance(other, FunctionType):
             return False
+
         if not other.argument_type.is_copyable_from(self.argument_type):
             return False
 

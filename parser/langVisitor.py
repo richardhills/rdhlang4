@@ -125,6 +125,11 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#toInferredType.
+    def visitToInferredType(self, ctx):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#toArray.
     def visitToArray(self, ctx):
         return self.visitChildren(ctx)
@@ -155,6 +160,16 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#staticValueDeclaration.
+    def visitStaticValueDeclaration(self, ctx):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#typedef.
+    def visitTypedef(self, ctx):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#toExpression.
     def visitToExpression(self, ctx):
         return self.visitChildren(ctx)
@@ -162,6 +177,11 @@ class langVisitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by langParser#voidType.
     def visitVoidType(self, ctx):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#inferredType.
+    def visitInferredType(self, ctx):
         return self.visitChildren(ctx)
 
 
