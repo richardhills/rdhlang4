@@ -60,6 +60,7 @@ expression
    | stringType                    # toStringType
    | functionType                  # toFunctionType
    | objectType                    # toObjectType
+   | anyType                       # toAnyType
    | returnExpression              # toReturnExpression
    ;
 
@@ -88,21 +89,26 @@ objectType
    : 'Object' '{' (propertyType ';')* '}'
    ;
 
+anyType
+   : 'Any'
+   ;
+
 propertyType
    : expression SYMBOL
    ;
 
 functionLiteral
-   : functionLiteralWithTypes
-   | functionLiteralWithoutTypes
+   : 'function' functionArgumentAndReturns functionThrows? '{' (statement ';')* '}'
    ;
 
-functionLiteralWithTypes
-   : 'function' '(' ( expression '=>' expression ) ')' '{' (statement ';')* '}'
+functionArgumentAndReturns
+   : '(' ')'
+   | '(' expression '=>' expression ')'
    ;
 
-functionLiteralWithoutTypes
-   : 'function' '(' ')' '{' (statement ';')* '}'
+functionThrows
+   : 'nothrow'
+   | 'throws' expression
    ;
 
 returnExpression

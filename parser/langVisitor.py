@@ -85,6 +85,11 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#toAnyType.
+    def visitToAnyType(self, ctx):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#toNewObject.
     def visitToNewObject(self, ctx):
         return self.visitChildren(ctx)
@@ -180,6 +185,11 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#anyType.
+    def visitAnyType(self, ctx):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#propertyType.
     def visitPropertyType(self, ctx):
         return self.visitChildren(ctx)
@@ -190,13 +200,13 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
-    # Visit a parse tree produced by langParser#functionLiteralWithTypes.
-    def visitFunctionLiteralWithTypes(self, ctx):
+    # Visit a parse tree produced by langParser#functionArgumentAndReturns.
+    def visitFunctionArgumentAndReturns(self, ctx):
         return self.visitChildren(ctx)
 
 
-    # Visit a parse tree produced by langParser#functionLiteralWithoutTypes.
-    def visitFunctionLiteralWithoutTypes(self, ctx):
+    # Visit a parse tree produced by langParser#functionThrows.
+    def visitFunctionThrows(self, ctx):
         return self.visitChildren(ctx)
 
 

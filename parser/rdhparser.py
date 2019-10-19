@@ -17,12 +17,12 @@ class AlwaysFailErrorListener(ConsoleErrorListener):
         super(AlwaysFailErrorListener, self).syntaxError(recognizer, offendingSymbol, line, column, msg, e)
         raise ParseError()
 
-def parse(code):
+def parse(code, debug=False):
     print "Parsing {}".format(code)
     lexer = langLexer(InputStream(code))
     tokens = CommonTokenStream(lexer)
     parser = langParser(tokens)
     parser.addErrorListener(AlwaysFailErrorListener())
     ast = parser.code()
-    visitor = RDHLang4Visitor()
+    visitor = RDHLang4Visitor(debug=debug)
     return visitor.visit(ast)

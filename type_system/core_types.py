@@ -1,31 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 from __future__ import unicode_literals
-
 from bunch import Bunch
-
+from exception_types import DataIntegrityError, IncompatableAssignmentError, \
+    CreateReferenceError, FatalException
 from utils import InternalMarker, MISSING, NO_VALUE
-from pip._vendor.pyparsing import oneOf
-
-
-class CreateReferenceError(Exception):
-    # A run time error, caused by attempts to strongly-type something
-    # where we can't make gaurantees. Should only be thrown by casting
-    # in strongly typed code
-    pass
-
-
-class IncompatableAssignmentError(Exception):
-    # A run time error, caused by attempts in weakly-typed code
-    # to assign something to a value that would invalid strongly-syped
-    # codes access
-    pass
-
-
-class DataIntegrityError(Exception):
-    # This error is fatal. Our data model doesn't match the data
-    pass
-
 
 def infer_primitive_type(value):
     from executor.executor import PreparedFunction
@@ -138,6 +117,12 @@ class AnyType(Type):
     def __repr__(self):
         return "AnyType"
 
+class InferredType(Type):
+    def is_copyable_from(self, other):
+        return False
+
+    def __repr__(self):
+        return "InferredType"
 
 class VoidType(Type):
 

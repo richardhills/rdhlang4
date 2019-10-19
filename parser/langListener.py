@@ -148,6 +148,15 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#toAnyType.
+    def enterToAnyType(self, ctx):
+        pass
+
+    # Exit a parse tree produced by langParser#toAnyType.
+    def exitToAnyType(self, ctx):
+        pass
+
+
     # Enter a parse tree produced by langParser#toNewObject.
     def enterToNewObject(self, ctx):
         pass
@@ -319,6 +328,15 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#anyType.
+    def enterAnyType(self, ctx):
+        pass
+
+    # Exit a parse tree produced by langParser#anyType.
+    def exitAnyType(self, ctx):
+        pass
+
+
     # Enter a parse tree produced by langParser#propertyType.
     def enterPropertyType(self, ctx):
         pass
@@ -337,21 +355,21 @@ class langListener(ParseTreeListener):
         pass
 
 
-    # Enter a parse tree produced by langParser#functionLiteralWithTypes.
-    def enterFunctionLiteralWithTypes(self, ctx):
+    # Enter a parse tree produced by langParser#functionArgumentAndReturns.
+    def enterFunctionArgumentAndReturns(self, ctx):
         pass
 
-    # Exit a parse tree produced by langParser#functionLiteralWithTypes.
-    def exitFunctionLiteralWithTypes(self, ctx):
+    # Exit a parse tree produced by langParser#functionArgumentAndReturns.
+    def exitFunctionArgumentAndReturns(self, ctx):
         pass
 
 
-    # Enter a parse tree produced by langParser#functionLiteralWithoutTypes.
-    def enterFunctionLiteralWithoutTypes(self, ctx):
+    # Enter a parse tree produced by langParser#functionThrows.
+    def enterFunctionThrows(self, ctx):
         pass
 
-    # Exit a parse tree produced by langParser#functionLiteralWithoutTypes.
-    def exitFunctionLiteralWithoutTypes(self, ctx):
+    # Exit a parse tree produced by langParser#functionThrows.
+    def exitFunctionThrows(self, ctx):
         pass
 
 

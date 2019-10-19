@@ -5,8 +5,10 @@ from __future__ import unicode_literals
 import json
 from unittest.case import TestCase
 
-from executor.executor import PreparedFunction, PreparationException
+from executor.executor import PreparedFunction, PreparationException, \
+    BreakException
 from parser.rdhparser import parse
+from type_system.core_types import ObjectType
 
 
 class TestExecutor(TestCase):
@@ -80,7 +82,7 @@ class TestExecutor(TestCase):
 
     def test_invalid_assignment(self):
         ast = parse("""
-            function(Void => String) {
+            function(Void => String) nothrow {
                 String foo = 42;
                 return foo;
             }
@@ -91,7 +93,7 @@ class TestExecutor(TestCase):
     def test_nested_function_call(self):
         ast = parse("""
             function(Void => Integer) {
-                Function<Void => Integer> foo = function(Void => Integer) {
+                Function<Void => Integer> foo = function(Void => Integer) nothrow {
                     return 42;
                 };
                 return foo();
@@ -104,7 +106,7 @@ class TestExecutor(TestCase):
         ast = parse("""
             function(Void => Integer) {
                 Integer foo = 42;
-                Function<Void => Integer> baz = function(Void => Integer) {
+                Function<Void => Integer> baz = function(Void => Integer) nothrow {
                     return foo;
                 };
                 return baz();
@@ -117,7 +119,7 @@ class TestExecutor(TestCase):
     def test_argument_access(self):
         ast = parse("""
             function(Void => Integer) {
-                Function<Integer => Integer> incremented = function(Integer => Integer) {
+                Function<Integer => Integer> incremented = function(Integer => Integer) nothrow {
                     return argument + 1;
                 };
                 return incremented(41);
@@ -137,10 +139,43 @@ class TestExecutor(TestCase):
         function = PreparedFunction(ast)
         self.assertEquals(function.invoke(), 42)
 
+    def test_weak_unchecked_object_mutations(self):
+        ast = parse("""
+            function(Void => Integer) {
+                Object { Any bar; } foo = { bar: 5 };
+                foo.bar = foo.bar + 36;
+                return foo.bar + 1;
+            }
+        """)
+        function = PreparedFunction(ast)
+        self.assertEquals(function.invoke(), 42)
+
+    def test_weak_checked_object_mutations(self):
+        ast = parse("""
+            function(Void => Integer) nothrow {
+                Object { Any bar; } foo = { bar: 5 };
+                foo.bar = foo.bar + 36;
+                return foo.bar + 1;
+            }
+        """)
+        with self.assertRaises(PreparationException) as cm:
+            PreparedFunction(ast)
+
+    def test_python_like_code(self):
+        ast = parse("""
+            function(Void => Any) {
+                foo = 42;
+                return foo;
+            }
+        """)
+        function = PreparedFunction(ast)
+        self.assertTrue(isinstance(function.break_types["exception"], ObjectType))
+        self.assertEquals(function.invoke(), 42)
+
     def test_doubler(self):
         ast = parse("""
             function(Void => Integer) {
-                Function<Integer => Integer> doubler = function(Integer => Integer) {
+                Function<Integer => Integer> doubler = function(Integer => Integer) nothrow {
                     return argument + argument;
                 };
                 Function<Object {
@@ -149,7 +184,7 @@ class TestExecutor(TestCase):
                 } => Integer> doItTwice = function(Object {
                     Function<Integer => Integer> func;
                     Integer number;
-                } => Integer) {
+                } => Integer) nothrow {
                     return func(func(number));
                 };
                 return doItTwice({ func: doubler, number: 3 });
@@ -174,5 +209,38 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 5 * 5 * 5 * 5 * 5 * 5 * 5 * 5)
+        self.assertEquals(function.invoke(), ((5 ** 2) ** 2) ** 2)
 
+class TextPreparationErrors(TestCase):
+    def test_invalid_code_fail_at_preparation(self):
+        ast = parse("""
+            function(Void => Integer) nothrow {
+                Integer foo = "hello";
+                return foo;
+            }
+        """)
+        with self.assertRaises(PreparationException) as cm:
+            PreparedFunction(ast)
+
+    def test_invalid_code_with_inferred_throws_fails_at_runtime(self):
+        ast = parse("""
+            function(Void => Integer) {
+                Integer foo = "hello";
+                return foo;
+            }
+        """)
+        function = PreparedFunction(ast)
+        with self.assertRaises(BreakException) as cm:
+            function.invoke()
+
+    def test_invalid_code_with_throws_all_fails_at_runtime(self):
+        ast = parse("""
+            function(Void => Integer) throws Any {
+                Integer foo = "hello";
+                return foo;
+            }
+        """)
+        function = PreparedFunction(ast)
+        with self.assertRaises(BreakException) as cm:
+            function.invoke()
+        

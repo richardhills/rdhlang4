@@ -2,21 +2,16 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+from exception_types import FatalException, PreparationException, \
+    IncompatableAssignmentError, CreateReferenceError
 import json
 
-from parser.visitor import type, nop, literal_op, context_op
+from parser.visitor import type, nop, literal_op, context_op, \
+    symbolic_dereference_ops
 from type_system.core_types import ObjectType, IntegerType, BooleanType, \
     OneOfType, VoidType, Type, Object, StringType, UnitType, FunctionType, \
-    AnyType, merge_types, IncompatableAssignmentError
+    AnyType, merge_types, InferredType
 from utils import InternalMarker, MISSING, NO_VALUE
-
-
-class FatalException(Exception):
-    pass
-
-
-class PreparationException(Exception):
-    pass
 
 
 class BreakException(Exception):
@@ -131,6 +126,7 @@ class CommaOpcode(Opcode):
 
 
 class PrepareOpcode(Opcode):
+    PREPARATION_ERROR = TypeErrorFactory("PrepareOpcode: preparation_error")
 
     def __init__(self, data, visitor):
         self.function = enrich_opcode(data["function"], visitor)
@@ -142,16 +138,26 @@ class PrepareOpcode(Opcode):
         self.function_raw_data_type, self.other_break_types = get_expression_break_types(self.function, context)
         self.function_data = self.function_raw_data_type.get_crystal_value()
 
-        function = PreparedFunction(self.function_data, context)
+        break_types = [
+            self.other_break_types
+        ]
 
-        return merge_break_types([
-            self.other_break_types, {
+        try:
+            function = PreparedFunction(self.function_data, context)
+            break_types.append({
                 "value": function.get_type()
-            }
-        ])
+            })
+        except PreparationException:
+            break_types.append({
+                "value": AnyType(),
+                "exception": self.PREPARATION_ERROR.get_type()
+            })
+
+        return merge_break_types(break_types)
 
     def jump(self, context):
-        raise BreakException("value", PreparedFunction(self.function_data, context))
+        function = PreparedFunction(self.function_data, context)
+        raise BreakException("value", function)
 
 
 class JumpOpcode(Opcode):
@@ -163,8 +169,8 @@ class JumpOpcode(Opcode):
         self.argument = enrich_opcode(data.get("argument", nop()), visitor)
 
     def get_break_types(self, context):
-        function_type, function_evaluation_break_types = get_expression_break_types(self.function, context)
-        argument_type, argument_break_types = get_expression_break_types(self.argument, context)
+        function_type, function_evaluation_break_types = get_expression_break_types(self.function, context, MISSING)
+        argument_type, argument_break_types = get_expression_break_types(self.argument, context, MISSING)
 
         break_types = [ argument_break_types, function_evaluation_break_types ]
 
@@ -403,6 +409,7 @@ class AdditionOpcode(Opcode):
             lvalue + rvalue
         )
 
+
 class MultiplicationOpcode(Opcode):
     MISSING_INTEGERS = TypeErrorFactory("MultiplicationOpcode: missing_integers")
 
@@ -441,30 +448,24 @@ class MultiplicationOpcode(Opcode):
         )
 
 
-
 class DereferenceOpcode(Opcode):
     INVALID_DEREFERENCE = TypeErrorFactory("DereferenceOpcode: invalid_dereference")
 
     def __init__(self, data, visitor):
         super(DereferenceOpcode, self).__init__(data)
         self.reference = enrich_opcode(self.data["reference"], visitor)
-        if "of" in data:
-            self.of = enrich_opcode(self.data["of"], visitor)
-        else:
-            self.of = None
+        self.of = enrich_opcode(self.data["of"], visitor)
 
     def get_break_types(self, context):
         reference_type, reference_break_types = get_expression_break_types(self.reference, context)
-        of_break_types = {}
         self_break_types = {}
         value_type = None
 
-        if self.of:
-            of_type, of_break_types = get_expression_break_types(self.of, context)
-            crystal_reference_value = reference_type.get_crystal_value()
+        of_type, of_break_types = get_expression_break_types(self.of, context)
+        crystal_reference_value = reference_type.get_crystal_value()
 
-            if isinstance(of_type, ObjectType) and isinstance(crystal_reference_value, basestring):
-                value_type = of_type.property_types.get(crystal_reference_value)
+        if isinstance(of_type, ObjectType) and isinstance(crystal_reference_value, basestring):
+            value_type = of_type.property_types.get(crystal_reference_value)
 
         if value_type is None:
             value_type = AnyType()
@@ -500,6 +501,47 @@ class DereferenceOpcode(Opcode):
 
     def __repr__(self):
         return "Dereference< {}.{} >".format(self.of, self.reference)
+
+class DynamicDereferenceOpcode(Opcode):
+    INVALID_DEREFERENCE = TypeErrorFactory("DynamicDereferenceOpcode: invalid_dereference")
+
+    def __init__(self, data, visitor):
+        super(DynamicDereferenceOpcode, self).__init__(data)
+        self.reference = enrich_opcode(self.data["reference"], visitor)
+
+    def get_break_types(self, context):
+        reference_type, reference_break_types = get_expression_break_types(self.reference, context)
+
+        break_types = [reference_break_types, {
+            "value": AnyType(),
+            "exception": self.INVALID_DEREFERENCE.get_type()
+        }]
+
+        return merge_break_types(break_types)
+
+    def get_reference_and_of(self, context):
+        reference = evaluate(self.reference, context)
+
+        argument = context.argument
+        if argument and isinstance(argument, Object) and reference in argument:
+            return reference, argument
+
+        local = context.local
+        if local and isinstance(local, Object) and reference in local:
+            return reference, local
+
+        # Fall back on it being a local variable
+        return reference, local
+
+    def jump(self, context):
+        reference, of = self.get_reference_and_of(context)
+
+        value = getattr(of, reference, MISSING)
+
+        if value is MISSING:
+            raise self.INVALID_DEREFERENCE()
+
+        raise BreakException("value", value)
 
 
 def get_context_type(context):
@@ -544,6 +586,7 @@ OPCODES = {
     "new_object": NewObjectOpcode,
     "merge": MergeOpcode,
     "dereference": DereferenceOpcode,
+    "dynamic_dereference": DynamicDereferenceOpcode,
     "context": ContextOpcode,
     "addition": AdditionOpcode,
     "multiplication": MultiplicationOpcode
@@ -580,12 +623,14 @@ def create_function_type_from_data(data):
 
 
 TYPES = {
+    "Any": lambda data: AnyType(),
     "Object": lambda data: ObjectType({ name: enrich_type(type) for name, type in data["properties"].items() }),
     "Integer": lambda data: IntegerType(),
     "Boolean": lambda data: BooleanType(),
     "Void": lambda data: VoidType(),
     "String": lambda data: StringType(),
-    "Function": create_function_type_from_data
+    "Function": create_function_type_from_data,
+    "Inferred": lambda data: InferredType()
 }
 
 
@@ -610,21 +655,21 @@ class UnboundDereferenceBinder(object):
             if isinstance(argument_type, ObjectType) and reference in argument_type.property_types:
                 return {
                     "opcode": "dereference",
-                    "reference": literal_op("argument"),
+                    "reference": literal_op("argument", None),
                     "of": context_opcode
                 }
             local_type = getattr(self.context.types, "local", MISSING)
             if isinstance(local_type, ObjectType) and reference in local_type.property_types:
                 return {
                     "opcode": "dereference",
-                    "reference": literal_op("local"),
+                    "reference": literal_op("local", None),
                     "of": context_opcode
                 }
             outer_context = getattr(self.context, "outer", MISSING)
             if outer_context is not MISSING:
                 return UnboundDereferenceBinder(outer_context).check_context_for_of(reference, {
                     "opcode": "dereference",
-                    "reference": literal_op("outer"),
+                    "reference": literal_op("outer", None),
                     "of": context_opcode
                 })
 
@@ -635,16 +680,17 @@ class UnboundDereferenceBinder(object):
             reference = expression["reference"]
             of_reference = self.check_context_for_of(reference)
 
-            code = {
-                "opcode": "dereference",
-                "reference": literal_op(reference)
-            }
-
-            if of_reference is None and hasattr(self.context, "outer"):
-                UnboundDereferenceBinder(self.context.outer)(expression)
-
             if of_reference:
-                code["of"] = of_reference
+                code = {
+                    "opcode": "dereference",
+                    "of": of_reference,
+                    "reference": literal_op(reference, None)
+                }
+            else:
+                code = {
+                    "opcode": "dynamic_dereference",
+                    "reference": literal_op(reference, None)
+                }
 
             return code
         return expression
@@ -683,13 +729,18 @@ class PreparedFunction(object):
             })
         })
 
-        local_initializer = self.data.get("local_initializer", None)
-        if local_initializer:
-            self.local_initializer = enrich_opcode(local_initializer, UnboundDereferenceBinder(self.with_argument_type_context))
-        else:
-            self.local_initializer = enrich_opcode(nop(), UnboundDereferenceBinder(self.with_argument_type_context))
+        # Don't use an assignment operator, since the context for running local_initializer
+        # and for checking that the assigned value of local are different.
+
+        local_initializer = self.data.get("local_initializer", nop())
+        local_initializer_unbound_dereference_binder = UnboundDereferenceBinder(self.with_argument_type_context)
+        self.local_initializer = enrich_opcode(local_initializer, local_initializer_unbound_dereference_binder)
 
         local_initializer_type, initializer_break_types = get_expression_break_types(self.local_initializer, self.with_argument_type_context)
+
+        local_initializer_assignment_break_types = {}
+        if not self.local_type.is_copyable_from(local_initializer_type):
+            local_initializer_assignment_break_types["exception"] = AssignmentOpcode.INVALID_ASSIGNMENT.get_type()
 
         self.code = enrich_opcode(self.data["code"], UnboundDereferenceBinder(self.with_argument_and_local_type_context))
         _, code_break_types = get_expression_break_types(self.code, self.with_argument_and_local_type_context, None)
@@ -702,17 +753,22 @@ class PreparedFunction(object):
             mode: enrich_type(type_data) for mode, type_data in break_types_data.items()
         }
 
-        actual_break_types = merge_break_types([ code_break_types, initializer_break_types ])
+        actual_break_types = merge_break_types([ code_break_types, initializer_break_types, local_initializer_assignment_break_types ])
 
         for break_mode, actual_break_type in actual_break_types.items():
             declared_break_type = self.break_types.get(break_mode, MISSING)
+            if isinstance(declared_break_type, InferredType):
+                self.break_types[break_mode] = actual_break_type
+                continue
             if declared_break_type is MISSING:
                 raise PreparationException("Code {} breaks with {}, but nothing declared".format(break_mode, actual_break_type))
             if not declared_break_type.is_copyable_from(actual_break_type):
                 raise PreparationException("Code {} breaks with {}, but declared {}".format(break_mode, actual_break_type, declared_break_type))
 
-        if not self.local_type.is_copyable_from(local_initializer_type):
-            raise PreparationException("local_initializer has type {} but locals defined with type {}".format(local_initializer_type, self.local_type))
+        # Any remaining inferred break types are not thrown by the code
+        for break_mode, declared_break_type in self.break_types.items():
+            if isinstance(declared_break_type, InferredType):
+                del self.break_types[break_mode]
 
     def get_type(self):
         return FunctionType(self.argument_type, self.break_types)
@@ -730,7 +786,10 @@ class PreparedFunction(object):
             "outer": self.outer_context_type
         })
 
-        evaluation_context.create_reference(context_type)
+        try:
+            evaluation_context.create_reference(context_type)
+        except CreateReferenceError:
+            raise AssignmentOpcode.INVALID_ASSIGNMENT()
 
         evaluate(self.code, evaluation_context)
 

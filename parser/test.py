@@ -59,7 +59,7 @@ class TestFunctionParsing(TestCase):
 
     def test_empty_function(self):
         ast = parse("""
-            function () { }
+            function () nothrow { }
         """)
         self.assertEquals(
             ast,
@@ -77,7 +77,7 @@ class TestFunctionParsing(TestCase):
 
     def test_simple_assignment_function(self):
         ast = parse("""
-            function() { local = 42; }
+            function() nothrow { local = 42; }
         """)
         CORRECT = {
             "static": new_object_op({
@@ -89,7 +89,7 @@ class TestFunctionParsing(TestCase):
             }),
             "local_initializer": new_object_op({}),
             "code": assignment_op(
-                symbolic_dereference_ops("local"),
+                symbolic_dereference_ops(["local"]),
                 literal_op(42)
             )
         }
@@ -99,7 +99,7 @@ class TestFunctionParsing(TestCase):
 
     def test_simple_return_function(self):
         ast = parse("""
-            function() { return 42; }
+            function() nothrow { return 42; }
         """)
         CORRECT = {
             "static": new_object_op({
@@ -120,7 +120,7 @@ class TestFunctionParsing(TestCase):
 
     def test_simple_return_function_with_types(self):
         ast = parse("""
-            function(String => Integer) { return 42; }
+            function(String => Integer) nothrow { return 42; }
         """)
         CORRECT = {
             "static": new_object_op({
@@ -138,7 +138,7 @@ class TestFunctionParsing(TestCase):
 
     def test_addition(self):
         ast = parse("""
-            function() { 4 + 38; }
+            function() nothrow { 4 + 38; }
         """)
         CORRECT = {
             "static": new_object_op({
@@ -160,7 +160,7 @@ class TestFunctionParsing(TestCase):
 class TestLocalVariables(TestCase):
     def test_basic_variable(self):
         ast = parse("""
-            function(Void => Void) {
+            function(Void => Void) nothrow {
                 Integer foo = 42;
             }
         """)
@@ -184,7 +184,7 @@ class TestLocalVariables(TestCase):
 
     def test_return_basic_variable(self):
         ast = parse("""
-            function(Void => Integer) {
+            function(Void => Integer) nothrow {
                 Integer foo = 42;
                 return foo;
             }
@@ -199,7 +199,7 @@ class TestLocalVariables(TestCase):
                     "foo": type("Integer")
                 }),
             }),
-            "code": break_op("return", symbolic_dereference_ops("foo")),
+            "code": break_op("return", symbolic_dereference_ops(["foo"])),
             "local_initializer": new_object_op({
                 "foo": literal_op(42)
             })
@@ -210,7 +210,7 @@ class TestLocalVariables(TestCase):
 
     def test_2_local_variables(self):
         ast = parse("""
-            function(Void => Void) {
+            function(Void => Void) nothrow {
                 Integer foo = 42;
                 String bar = "hello";
             }
@@ -240,7 +240,7 @@ class TestLocalVariables(TestCase):
                     }),
                 }),
                 "local_initializer": merge_op(
-                    symbolic_dereference_ops("outer", "local"),
+                    symbolic_dereference_ops(["outer", "local"]),
                     new_object_op({
                         "bar": literal_op("hello")
                     })
@@ -256,7 +256,7 @@ class TestLocalVariables(TestCase):
 
     def test_2_local_variables_with_mutation(self):
         ast = parse("""
-            function(Void => Void) {
+            function(Void => Void) nothrow {
                 Integer foo = 42;
                 foo = foo + 3;
                 String bar = "hello";
@@ -277,8 +277,8 @@ class TestLocalVariables(TestCase):
             }),
             "code": comma_op([
                 assignment_op(
-                    symbolic_dereference_ops("foo"),
-                    addition_op(symbolic_dereference_ops("foo"), literal_op(3))
+                    symbolic_dereference_ops(["foo"]),
+                    addition_op(symbolic_dereference_ops(["foo"]), literal_op(3))
                 ),
                 jump_op(prepare_op(literal_op({
                     "static": new_object_op({
@@ -292,7 +292,7 @@ class TestLocalVariables(TestCase):
                         })
                     }),
                     "local_initializer": merge_op(
-                        symbolic_dereference_ops("outer", "local"),
+                        symbolic_dereference_ops(["outer", "local"]),
                         new_object_op({
                             "bar": literal_op("hello")
                         })
@@ -309,7 +309,7 @@ class TestLocalVariables(TestCase):
 class TestObjectTypes(TestCase):
     def test_basic_object(self):
         ast = parse("""
-            function(Void => Void) {
+            function(Void => Void) nothrow {
                 Object {
                     Integer bar;
                 } foo = { bar: 5 };
@@ -339,8 +339,8 @@ class TestNestedFunctions(TestCase):
 
     def test_nested_function(self):
         ast = parse("""
-            function(Void => Integer) {
-                Function<Void => Integer> foo = function(Void => Integer) {
+            function(Void => Integer) nothrow {
+                Function<Void => Integer> foo = function(Void => Integer) nothrow {
                     return 42;
                 };
                 return foo();
@@ -369,7 +369,7 @@ class TestNestedFunctions(TestCase):
             }),
             "code":
                 break_op("return",
-                    catch_op("return", jump_op(symbolic_dereference_ops("foo"), nop()))
+                    catch_op("return", jump_op(symbolic_dereference_ops(["foo"]), nop()))
                 )
         }
         print json.dumps(ast)
