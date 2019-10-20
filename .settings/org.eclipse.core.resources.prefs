@@ -6,6 +6,7 @@ encoding//parser/langParser.py=utf-8
 encoding//parser/rdhparser.py=utf-8
 encoding//parser/test.py=utf-8
 encoding//parser/visitor.py=utf-8
+encoding//shell/main.py=utf-8
 encoding//type_system/core_types.py=utf-8
 encoding//type_system/test.py=utf-8
 encoding/test.py=utf-8

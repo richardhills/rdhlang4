@@ -219,6 +219,116 @@ def symbolic_dereference_ops(parts, ctx=None):
         return dereference_op(literal_op(parts[-1], ctx), symbolic_dereference_ops(parts[:-1], ctx), ctx)
 
 
+def decompose_function(
+    argument_type_expression,
+    breaks_type_expression,
+    extra_statics,
+    local_variable_types,
+    local_initializer,
+    code_expressions,
+    ctx=None
+):
+    code_for_us = []
+    local_variable_declaration = static_value_declaration = None
+    code_for_remainder_function = None
+    need_remainder_function = True
+
+    for index, code_expression in enumerate(code_expressions):
+        if isinstance(code_expression, LocalVariableDeclaration):
+            local_variable_declaration = code_expression
+            code_for_remainder_function = code_expressions[index + 1:]
+            break
+        elif isinstance(code_expression, StaticValueDeclaration):
+            static_value_declaration = code_expression
+            code_for_remainder_function = code_expressions[index + 1:]
+            break
+        else:
+            code_for_us.append(code_expression)
+    else:
+        need_remainder_function = False
+
+    need_function_for_us = (
+        len(code_for_us) > 0
+        or not need_remainder_function
+        or len(local_variable_types) > 0
+        or len(extra_statics) > 0
+    )
+
+    if need_remainder_function:
+        remainder_function_local_variable_types = local_variable_types
+        new_variable_initializer = old_variables_initializer = None
+
+        if local_variable_declaration:
+            remainder_function_local_variable_types = spread_dict(
+                remainder_function_local_variable_types, {
+                    local_variable_declaration.name: local_variable_declaration.type
+                }
+            )
+
+            new_variable_initializer = new_object_op({
+                local_variable_declaration.name: local_variable_declaration.initial_value
+            }, ctx)
+
+        if len(local_variable_types) > 0:
+            old_variables_initializer = symbolic_dereference_ops(["outer", "local"])
+
+        if old_variables_initializer:
+            if new_variable_initializer:
+                remainder_function_local_variable_initializer = merge_op(
+                    old_variables_initializer,
+                    new_variable_initializer
+                )
+            else:
+                remainder_function_local_variable_initializer = old_variables_initializer
+        else:
+            if new_variable_initializer:
+                remainder_function_local_variable_initializer = new_variable_initializer
+            else:
+                remainder_function_local_variable_initializer = new_object_op({}, None)
+
+        remainder_function_extra_statics = dict(extra_statics)
+        if static_value_declaration:
+            remainder_function_extra_statics[static_value_declaration.name] = static_value_declaration.value
+
+        if need_function_for_us:
+            remainder_function = decompose_function(
+                type("Void", ctx),
+                breaks_type_expression,
+                remainder_function_extra_statics,
+                remainder_function_local_variable_types,
+                remainder_function_local_variable_initializer,
+                code_for_remainder_function,
+                ctx
+            )
+
+            code_for_us.append(
+                jump_op(prepare_op(literal_op(remainder_function, ctx), ctx), nop(), ctx)
+            )
+        else:
+            remaining_code_function = decompose_function(
+                argument_type_expression,
+                breaks_type_expression,
+                remainder_function_extra_statics,
+                remainder_function_local_variable_types,
+                remainder_function_local_variable_initializer,
+                code_for_remainder_function,
+                ctx
+            )
+
+    if need_function_for_us:
+        return function_literal(
+            argument_type_expression,
+            breaks_type_expression,
+            extra_statics,
+            object_type(local_variable_types, ctx),
+            local_initializer,
+            code_for_us,
+            ctx
+        )
+    else:
+        return remaining_code_function
+
+
 def function_literal(argument_type_expression, breaks_type_expression, extra_statics, local_type_expression, local_initializer, code_expressions, ctx=None):
     function_literal = {
         "static": new_object_op(spread_dict(extra_statics, {
@@ -429,117 +539,6 @@ class RDHLang4Visitor(langVisitor):
     def visitPropertyType(self, ctx):
         return (self.visit(ctx.expression()), ctx.SYMBOL().getText())
 
-    def visit_function(
-        self,
-        argument_type_expression,
-        breaks_type_expression,
-        extra_statics,
-        local_variable_types,
-        local_initializer,
-        code_expressions,
-        ctx
-    ):
-        code_for_us = []
-        local_variable_declaration = static_value_declaration = None
-        code_for_remainder_function = None
-        need_remainder_function = True
-
-        for index, code_expression_ctx in enumerate(code_expressions):
-            code_expression = self.visit(code_expression_ctx)
-            if isinstance(code_expression, LocalVariableDeclaration):
-                local_variable_declaration = code_expression
-                code_for_remainder_function = code_expressions[index + 1:]
-                break
-            elif isinstance(code_expression, StaticValueDeclaration):
-                static_value_declaration = code_expression
-                code_for_remainder_function = code_expressions[index + 1:]
-                break
-            else:
-                code_for_us.append(code_expression)
-        else:
-            need_remainder_function = False
-
-        need_function_for_us = (
-            len(code_for_us) > 0
-            or not need_remainder_function
-            or len(local_variable_types) > 0
-            or len(extra_statics) > 0
-        )
-
-        if need_remainder_function:
-            remainder_function_local_variable_types = local_variable_types
-            new_variable_initializer = old_variables_initializer = None
-
-            if local_variable_declaration:
-                remainder_function_local_variable_types = spread_dict(
-                    remainder_function_local_variable_types, {
-                        local_variable_declaration.name: local_variable_declaration.type
-                    }
-                )
-
-                new_variable_initializer = new_object_op({
-                    local_variable_declaration.name: local_variable_declaration.initial_value
-                }, ctx if self.debug else None)
-
-            if len(local_variable_types) > 0:
-                old_variables_initializer = symbolic_dereference_ops(["outer", "local"])
-
-            if old_variables_initializer:
-                if new_variable_initializer:
-                    remainder_function_local_variable_initializer = merge_op(
-                        old_variables_initializer,
-                        new_variable_initializer
-                    )
-                else:
-                    remainder_function_local_variable_initializer = old_variables_initializer
-            else:
-                if new_variable_initializer:
-                    remainder_function_local_variable_initializer = new_variable_initializer
-                else:
-                    remainder_function_local_variable_initializer = new_object_op({}, None)
-
-            remainder_function_extra_statics = dict(extra_statics)
-            if static_value_declaration:
-                remainder_function_extra_statics[static_value_declaration.name] = static_value_declaration.value
-
-            if need_function_for_us:
-                remainder_function = self.visit_function(
-                    type("Void", ctx if self.debug else None),
-                    breaks_type_expression,
-                    remainder_function_extra_statics,
-                    remainder_function_local_variable_types,
-                    remainder_function_local_variable_initializer,
-                    code_for_remainder_function,
-                    ctx
-                )
-
-                code_for_us.append(
-                    jump_op(prepare_op(literal_op(remainder_function, ctx), ctx), nop(), ctx)
-                )
-            else:
-                remaining_code_function = self.visit_function(
-                    argument_type_expression,
-                    breaks_type_expression,
-                    remainder_function_extra_statics,
-                    remainder_function_local_variable_types,
-                    remainder_function_local_variable_initializer,
-                    code_for_remainder_function,
-                    ctx if self.debug else None
-                )
-
-        if need_function_for_us:
-            return function_literal(
-                argument_type_expression,
-                breaks_type_expression,
-                extra_statics,
-                object_type(local_variable_types, ctx if self.debug else None),
-                local_initializer,
-                code_for_us,
-                ctx if self.debug else None
-            )
-        else:
-            return remaining_code_function
-
     def visitFunctionLiteral(self, ctx):
         argument_type, return_type = self.visit(ctx.functionArgumentAndReturns())
         function_throws = ctx.functionThrows()
@@ -557,12 +556,12 @@ class RDHLang4Visitor(langVisitor):
         if function_throws:
             breaks["exception"] = function_throws
 
-        return self.visit_function(
+        return decompose_function(
             argument_type,
             new_object_op(breaks),
             {}, {},
             new_object_op({}, ctx if self.debug else None),
-            ctx.statement(),
+            [self.visit(s) for s in ctx.statement()],
             ctx if self.debug else None
         )
 

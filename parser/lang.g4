@@ -5,6 +5,7 @@ grammar lang;
 
 code
    : literal
+   | statement
    ;
 
 newObject

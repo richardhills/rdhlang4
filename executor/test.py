@@ -211,6 +211,27 @@ class TestExecutor(TestCase):
         function = PreparedFunction(ast)
         self.assertEquals(function.invoke(), ((5 ** 2) ** 2) ** 2)
 
+    def test_monad_with_typedef(self):
+        ast = parse("""
+            function(Void => Integer) {
+                typedef Function<Void => Integer> IntMaker;
+                IntMaker fiver = function(Void => Integer) {
+                    return 5;
+                };
+
+                typedef Function<IntMaker => IntMaker> IntMakerModifier;
+                IntMakerModifier squarer = function(IntMaker => IntMaker) {
+                    return function(Void => Integer) {
+                        return outer.argument() * outer.argument();
+                    };
+                };
+
+                return squarer(squarer(squarer(fiver)))();
+            }
+        """)
+        print json.dumps(ast)
+        function = PreparedFunction(ast)
+        self.assertEquals(function.invoke(), ((5 ** 2) ** 2) ** 2)
 
     def test_monad_with_inferred_types(self):
         ast = parse("""
@@ -225,35 +246,13 @@ class TestExecutor(TestCase):
                     };
                 };
 
-                return squarer(squarer(squarer(fiver)))();
+                var fiverSquaredOverAndOver = squarer(squarer(squarer(fiver)));
+
+                return fiverSquaredOverAndOver();
             }
         """)
         function = PreparedFunction(ast)
         self.assertEquals(function.break_types, { "return": IntegerType() })
-        self.assertEquals(function.invoke(), ((5 ** 2) ** 2) ** 2)
-
-
-
-    def test_monad_with_typedef(self):
-        ast = parse("""
-            function(Void => Integer) nothrow {
-                typedef Function<Void => Integer> IntMaker;
-                IntMaker fiver = function(Void => Integer) nothrow {
-                    return 5;
-                };
-
-                typedef Function<IntMaker => IntMaker> IntMakerModifier;
-                IntMakerModifier squarer = function(IntMaker => IntMaker) nothrow {
-                    return function(Void => Integer) {
-                        return outer.argument() * outer.argument();
-                    };
-                };
-
-                return squarer(squarer(squarer(fiver)))();
-            }
-        """)
-        print json.dumps(ast)
-        function = PreparedFunction(ast)
         self.assertEquals(function.invoke(), ((5 ** 2) ** 2) ** 2)
 
 class TestExtraStatics(TestCase):
