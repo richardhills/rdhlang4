@@ -5,8 +5,13 @@ from antlr4 import *
 
 class langVisitor(ParseTreeVisitor):
 
-    # Visit a parse tree produced by langParser#code.
-    def visitCode(self, ctx):
+    # Visit a parse tree produced by langParser#toLiteral.
+    def visitToLiteral(self, ctx):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#toStatementList.
+    def visitToStatementList(self, ctx):
         return self.visitChildren(ctx)
 
 
@@ -170,6 +175,11 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#exit.
+    def visitExit(self, ctx):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#toExpression.
     def visitToExpression(self, ctx):
         return self.visitChildren(ctx)
@@ -227,6 +237,11 @@ class langVisitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by langParser#functionThrows.
     def visitFunctionThrows(self, ctx):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#functionExits.
+    def visitFunctionExits(self, ctx):
         return self.visitChildren(ctx)
 
 

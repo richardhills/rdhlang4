@@ -1,33 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 from __future__ import unicode_literals
+
+from __builtin__ import False
+
 from bunch import Bunch
+
 from exception_types import DataIntegrityError, IncompatableAssignmentError, \
     CreateReferenceError, FatalException
 from utils import InternalMarker, MISSING, NO_VALUE
-
-def infer_primitive_type(value):
-    from executor.executor import PreparedFunction
-
-    if isinstance(value, (int, bool, basestring)):
-        return UnitType(value)
-    if isinstance(value, PreparedFunction):
-        return FunctionType(VoidType(), {})
-    if isinstance(value, Object):
-        return ObjectType({})
-    if value is NO_VALUE:
-        return VoidType()
-    raise DataIntegrityError()
-
-def flatten_to_primitive_type(type):
-    if isinstance(type, (BooleanType, IntegerType, StringType, AnyType, VoidType, UnitType)):
-        return type
-    if isinstance(type, ObjectType):
-        return ObjectType({})
-    if isinstance(type, FunctionType):
-        return FunctionType(VoidType(), {})
-    raise DataIntegrityError("Unknown type {}".format(type))
-
+from prompt_toolkit.key_binding.bindings.named_commands import self_insert
 
 class Type(object):
 
@@ -65,7 +47,7 @@ class Type(object):
         return self
 
     def get_crystal_value(self):
-        return MISSING
+        raise NotImplementedError(type(self))
 
 
 class StringType(Type):
@@ -76,6 +58,11 @@ class StringType(Type):
         if isinstance(other, UnitType) and isinstance(other.value, basestring):
             return True
         return False
+
+    def to_dict(self):
+        return {
+            "type": "String"
+        }
 
     def __repr__(self):
         return "StringType"
@@ -88,7 +75,14 @@ class IntegerType(Type):
             return True
         if isinstance(other, UnitType) and isinstance(other.value, int):
             return True
+        if isinstance(other, OneOfType) and all([self.is_copyable_from(s) for s in other.types]):
+            return True
         return False
+
+    def to_dict(self):
+        return {
+            "type": "Integer"
+        }
 
     def __eq__(self, other):
         return isinstance(other, IntegerType)
@@ -106,6 +100,11 @@ class BooleanType(Type):
             return True
         return False
 
+    def to_dict(self):
+        return {
+            "type": "Boolean"
+        }
+
     def __repr__(self):
         return "BooleanType"
 
@@ -115,15 +114,38 @@ class AnyType(Type):
     def is_copyable_from(self, other):
         return True
 
+    def to_dict(self):
+        return {
+            "type": "Any"
+        }
+
+    def __eq__(self, other):
+        return isinstance(other, AnyType)
+
     def __repr__(self):
         return "AnyType"
+
+def broaden_inferred_type(type):
+    if isinstance(type, UnitType):
+        if isinstance(type.value, int):
+            return IntegerType()
+        if isinstance(type.value, basestring):
+            return StringType()
+        if isinstance(type.value, bool):
+            return BooleanType()
+    return type
 
 class InferredType(Type):
     def is_copyable_from(self, other):
         return True
 
     def replace_inferred_types(self, other):
-        return other
+        return broaden_inferred_type(other)
+
+    def to_dict(self):
+        return {
+            "type": "Inferred"
+        }
 
     def __repr__(self):
         return "InferredType"
@@ -132,6 +154,11 @@ class VoidType(Type):
 
     def is_copyable_from(self, other):
         return isinstance(other, VoidType)
+
+    def to_dict(self):
+        return {
+            "type": "Void"
+        }
 
     def __repr__(self):
         return "VoidType"
@@ -149,6 +176,18 @@ class UnitType(Type):
     def get_crystal_value(self):
         return self.value
 
+    def to_dict(self):
+        return {
+            "type": "Unit",
+            "value": self.value
+        }
+
+    def __hash__(self, *args, **kwargs):
+        return hash(self.value)
+
+    def __eq__(self, other):
+        return isinstance(other, UnitType) and other.value == self.value
+
     def __repr__(self):
         return "UnitType<{}>".format(self.value)
 
@@ -162,14 +201,18 @@ def flatten_types(types):
     return result
 
 def dedupe_types(types):
-    deduped_types = []
-    for index, t1 in enumerate(types):
-        for t2 in types[index + 1:]:
-            if t1.is_bindable_to(t2):
-                break
-        else:
-            deduped_types.append(t1)
-    return deduped_types
+    types_to_drop = set()
+    types_to_keep = set()
+
+    for i1, t1 in enumerate(types):
+        for i2, t2 in enumerate(types):
+            if t1 is not t2:
+                if t1.is_copyable_from(t2):
+                    types_to_drop.add(t2)
+                if t1.is_bindable_to(t2):
+                    types_to_keep.add(t1 if i1 > i2 else t2)
+
+    return list((set(types) - types_to_drop) | types_to_keep)
 
 
 def merge_types(types):
@@ -177,7 +220,7 @@ def merge_types(types):
     types = [t for t in types if not isinstance(t, VoidType)]
     if len(types) == 0:
         return VoidType()
-    if len(types) == 1:
+    elif len(types) == 1:
         return types[0]
     else:
         return OneOfType(types)
@@ -200,6 +243,17 @@ class OneOfType(Type):
             else:
                 return False
         return True
+
+    def to_dict(self):
+        return {
+            "type": "OneOfType",
+            "types": [t.to_dict() for t in self.types]
+        }
+
+    def __eq__(self, other):
+        if not isinstance(other, OneOfType):
+            return False
+        return set(self.types) == set(other.types)
 
     def __repr__(self):
         return "OneOfType<{}>".format(", ".join(repr(t) for t in self.types))
@@ -249,15 +303,35 @@ class ObjectType(Type):
         })
 
     def get_crystal_value(self):
+        from type_system.values import Object
         return Object({
             property_name: property_type.get_crystal_value() for property_name, property_type in self.property_types.items()
         })
+
+    def to_dict(self):
+        return {
+            "type": "Object",
+            "properties": {
+                name: value.to_dict() for name, value in self.property_types.items()
+            }
+        }
 
     def __repr__(self, *args, **kwargs):
         return "Object<\n{}\n>".format(",\n".join([
             "  {}: {}".format(property_name, property_type) for property_name, property_type in self.property_types.items()
         ]))
 
+class TupleType(Type):
+    def __init__(self, property_types, *args, **kwargs):
+        super(TupleType, self).__init__(*args, **kwargs)
+        # [ IntegerType, StringType ... ]
+        self.property_types = list(property_types)
+        for property_type in self.property_types:
+            if not isinstance(property_type, Type):
+                raise DataIntegrityError()
+
+    def get_crystal_value(self):
+        return tuple(p.get_crystal_value() for p in self.property_types)
 
 class FunctionType(Type):
 
@@ -285,88 +359,3 @@ class FunctionType(Type):
     def __repr__(self):
         return "Function<{} => {}>".format(self.argument_type, self.break_types)
 
-class Object(Bunch):
-    # Any fields we want to keep out of the bunch dictionary go here
-    type_references = None
-
-    def __init__(self, properties_and_values):
-        # { foo: Cell(5, IntegerType), bar: Cell("hello", StringType) ...}
-
-#        for value in properties_and_values.values():
-#            if value == NO_VALUE:
-#                raise DataIntegrityError()
-
-        self.type_references = []
-        super(Object, self).__init__(properties_and_values)
-
-    def __setattr__(self, property_name, new_value):
-        #if new_value == NO_VALUE:
-        #    raise DataIntegrityError()
-
-        if property_name not in [ "type_references" ]:
-            for other_type_reference in self.type_references:
-                if isinstance(other_type_reference, ObjectType):
-                    other_property_type = other_type_reference.property_types.get(property_name, MISSING)
-                    if other_property_type is MISSING:
-                        continue
-                    new_value_primitive_property_type = infer_primitive_type(new_value)
-                    other_primitive_property_type = flatten_to_primitive_type(other_property_type)
-                    if not other_primitive_property_type.is_copyable_from(new_value_primitive_property_type):
-                        raise IncompatableAssignmentError()
-    
-                    if isinstance(other_primitive_property_type, ObjectType):
-                        try:
-                            new_value.create_reference(other_property_type)
-                        except CreateReferenceError:
-                            raise IncompatableAssignmentError()
-        Bunch.__setattr__(self, property_name, new_value)
-
-    def is_new_type_reference_legal(self, new_type_reference):
-        if isinstance(new_type_reference, AnyType):
-            return True
-        if not isinstance(new_type_reference, ObjectType):
-            return False
-        # First do value checks - the new reference must accept the current values of the variables
-        # This might only be necessary if there are no references to the object yet...
-        for new_property_name, new_property_type in new_type_reference.property_types.items():
-            our_property_value = self.get(new_property_name, MISSING)
-            if our_property_value is MISSING:
-                return False
-            our_primitive_property_type = infer_primitive_type(our_property_value)
-            # Only check for initializability for primitive types, since we'll check reference types later
-            new_primitive_property_type = flatten_to_primitive_type(new_property_type)
-            if not new_primitive_property_type.is_copyable_from(our_primitive_property_type):
-                return False
-        # Then we do the other reference checks. These checks are more liberal than those at compile time, because:
-        # 1. We know the type of every reference to the object. These references must be equal or stronger than the compile
-        # time checks, and we can be 100% certain we don't break them, which leads to...
-        # 2. We can be lenient with properties that aren't bound by others reference checks, because, who cares?
-        for other_type_reference in self.type_references:
-            if isinstance(other_type_reference, ObjectType):
-                common_property_names = list(set(other_type_reference.property_types.keys()) & set(new_type_reference.property_types.keys()))
-                # Unlike the compile time checks, we can ignore properties that are not shared by any references
-                for common_property_name in common_property_names:
-                    new_property_type = new_type_reference.property_types[common_property_name]
-                    other_property_type = other_type_reference.property_types[common_property_name]
-                    # Stop us from mutating later it when the other side has a more specific idea on the type than we do
-                    if not other_property_type.is_bindable_to(new_property_type) and not new_property_type.is_const:
-                        return False
-                    # Stop the other side from mutating it later when we have a more specific idea on the type
-                    if not new_property_type.is_bindable_to(other_property_type) and not other_property_type.is_const:
-                        return False
-        return True
-
-    def create_reference_on_all_child_references(self, new_type_reference):
-        if isinstance(new_type_reference, ObjectType):
-            for new_property_name, new_property_type in new_type_reference.property_types.items():
-                # Identify whether the reference is to an object that also needs constraining with create_reference
-                our_property_value = self.get(new_property_name, MISSING)
-                if isinstance(our_property_value, Object):
-                    our_property_value.create_reference(new_property_type)
-
-    def create_reference(self, new_type_reference):
-        if self.is_new_type_reference_legal(new_type_reference):
-            self.create_reference_on_all_child_references(new_type_reference)
-            self.type_references.append(new_type_reference)
-        else:
-            raise CreateReferenceError()

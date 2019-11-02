@@ -1,0 +1,5 @@
+            function(Void => Integer) {
+                Object { Integer bar; } foo = { bar: 5 };
+                foo.bar = foo.bar + 36;
+                return foo.bar + 1;
+            }

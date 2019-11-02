@@ -5,9 +5,10 @@ from __future__ import unicode_literals
 from unittest.case import TestCase
 import unittest.main
 
-from type_system.core_types import IncompatableAssignmentError
-from type_system.core_types import ObjectType, IntegerType, BooleanType, AnyType, Object, \
-    CreateReferenceError, DataIntegrityError, UnitType
+from exception_types import CreateReferenceError
+from type_system.core_types import IncompatableAssignmentError, merge_types, \
+    OneOfType, ObjectType, IntegerType, BooleanType, AnyType, UnitType
+from type_system.values import Object
 
 
 # Golden rules:
@@ -325,6 +326,44 @@ class TestCompileTimeUnitTypeChecks(TestCase):
             })
         })
         self.assertTrue(foo.is_copyable_from(other_foo))
+
+
+class TestCompileTimeOneOfTypeChecks(TestCase):
+    def test_unitary_one_of_type(self):
+        self.assertEquals(
+            merge_types([ IntegerType(), IntegerType() ]),
+            IntegerType()
+        )
+
+    def test_merge_unit_types(self):
+        self.assertEquals(
+            merge_types([ UnitType(5), UnitType(5) ]),
+            UnitType(5)
+        )
+
+    def test_merge_unit_and_broader_types(self):
+        self.assertEquals(
+            merge_types([ UnitType(5), IntegerType() ]),
+            IntegerType()
+        )
+
+    def test_merge_integer_and_broader_types(self):
+        self.assertEquals(
+            merge_types([ IntegerType(), AnyType() ]),
+            AnyType()
+        )
+
+    def test_merge_different_unit_types(self):
+        self.assertEquals(
+            merge_types([ UnitType(5), UnitType(10), UnitType(15) ]),
+            OneOfType([ UnitType(5), UnitType(10), UnitType(15) ])
+        )
+
+    def test_subsume_unit_types(self):
+        self.assertEquals(
+            merge_types([ UnitType(5), UnitType(10), UnitType(15), UnitType(20), IntegerType() ]),
+            IntegerType()
+        )
 
 
 class TestRuntimeMutationChecks(TestCase):

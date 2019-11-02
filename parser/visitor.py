@@ -2,14 +2,14 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+from __builtin__ import True
 from cookielib import offset_from_tz_string
 from symbol import argument
 
 from antlr4.tree.Tree import TerminalNodeImpl
 
 from parser.langVisitor import langVisitor
-from utils import spread_dict, MISSING
-from __builtin__ import True
+from utils import spread_dict, MISSING, InternalMarker, NO_VALUE
 
 
 class ParseError(Exception):
@@ -62,7 +62,7 @@ def literal_op(value, ctx=None):
     }, ctx)
 
 
-def type(name, ctx=None, **kwargs):
+def type_op(name, ctx=None, **kwargs):
     if not isinstance(name, basestring):
         raise InvalidCodeError()
     properties = {
@@ -73,7 +73,7 @@ def type(name, ctx=None, **kwargs):
 
 
 def object_type(properties, ctx=None):
-    return type(
+    return type_op(
         "Object", ctx, **{
             "properties": new_object_op({
                 property: type for property, type in properties.items()
@@ -83,7 +83,7 @@ def object_type(properties, ctx=None):
 
 
 def function_type(argument, breaks, ctx=None):
-    return type(
+    return type_op(
         "Function", ctx, **{
             "argument": argument,
             "breaks": new_object_op(breaks, ctx)
@@ -132,14 +132,18 @@ def transform_op(code_expression, ctx=None, input="value", output="value"):
 
 
 def break_op(type, value, ctx=None):
-    if not is_expression(value):
+    if value is not MISSING and not is_expression(value):
         raise InvalidCodeError()
-    return add_debugging({
+    code = {
         "opcode": "transform",
-        "input": "value",
         "output": type,
-        "code": value
-    }, ctx)
+    }
+    if value is not MISSING:
+        code = spread_dict(code, {
+            "code": value,
+            "input": "value"
+        })
+    return add_debugging(code, ctx)
 
 
 def catch_op(type, code_expression, ctx=None):
@@ -292,7 +296,7 @@ def decompose_function(
 
         if need_function_for_us:
             remainder_function = decompose_function(
-                type("Void", ctx),
+                type_op("Void", ctx),
                 breaks_type_expression,
                 remainder_function_extra_statics,
                 remainder_function_local_variable_types,
@@ -355,6 +359,9 @@ def function_literal(argument_type_expression, breaks_type_expression, extra_sta
 
     return function_literal
 
+NO_THROWS = InternalMarker("NO_THROWS")
+
+NO_EXIT = InternalMarker("NO_EXIT")
 
 def prepare_op(function_expression, ctx=None):
     if not is_expression(function_expression):
@@ -406,6 +413,10 @@ class RDHLang4Visitor(langVisitor):
         value = self.visit(ctx.expression())
         name = ctx.SYMBOL().getText()
         return StaticValueDeclaration(name, value)
+
+    def visitExit(self, ctx):
+        value = self.visit(ctx.expression())
+        return transform_op(value, ctx, output="exit")
 
     def visitString(self, ctx):
         return literal_op(ctx.STRING().getText()[1:-1], ctx if self.debug else None)
@@ -460,6 +471,23 @@ class RDHLang4Visitor(langVisitor):
             return int(ctx.NUMBER().getText())
         return super(RDHLang4Visitor, self).visitLiteral(ctx)
 
+    def visitToStatementList(self, ctx):
+        break_types = {
+            "exception": type_op("Inferred"),
+            "return": type_op("Inferred"),
+            "exit": type_op("Inferred")
+        }
+        statements = [self.visit(s) for s in ctx.statement()]
+        statements = statements + [ break_op("exit", literal_op(0)) ]
+        return decompose_function(
+            type_op("Void"),
+            new_object_op(break_types),
+            {},
+            {},
+            new_object_op({}),
+            statements
+        )
+
     def visitObjectLiteral(self, ctx):
         result = {}
         for literalPair in ctx.literalPair():
@@ -508,27 +536,33 @@ class RDHLang4Visitor(langVisitor):
         return transform_op(self.visit(ctx.expression()), ctx if self.debug else None, "value", "return")
 
     def visitInferredType(self, ctx):
-        return type("Inferred", ctx if self.debug else None)
+        return type_op("Inferred", ctx if self.debug else None)
 
     def visitVoidType(self, ctx):
-        return type("Void", ctx if self.debug else None)
+        return type_op("Void", ctx if self.debug else None)
 
     def visitIntegerType(self, ctx):
-        return type("Integer", ctx if self.debug else None)
+        return type_op("Integer", ctx if self.debug else None)
 
     def visitStringType(self, ctx):
-        return type("String", ctx if self.debug else None)
+        return type_op("String", ctx if self.debug else None)
 
     def visitFunctionType(self, ctx):
         argument, returns = ctx.expression()
+        function_exits = ctx.functionExits()
+        break_types = {
+            "return": self.visit(returns),
+        }
+        if function_exits is not None:
+            function_exits = self.visit(function_exits)
+        if function_exits is not NO_EXIT:
+            break_types["exit"] = type_op("Integer")
         return function_type(
-            self.visit(argument), {
-                "return": self.visit(returns)
-            }, ctx if self.debug else None
+            self.visit(argument), break_types, ctx if self.debug else None
         )
 
     def visitAnyType(self, ctx):
-        return type("Any")
+        return type_op("Any")
 
     def visitObjectType(self, ctx):
         properties = {
@@ -541,20 +575,27 @@ class RDHLang4Visitor(langVisitor):
 
     def visitFunctionLiteral(self, ctx):
         argument_type, return_type = self.visit(ctx.functionArgumentAndReturns())
-        function_throws = ctx.functionThrows()
 
+        function_throws = ctx.functionThrows()
         if function_throws is None:
-            function_throws = type("Inferred")
+            function_throws = type_op("Inferred")
         else:
             function_throws = self.visit(function_throws)
-            if function_throws is MISSING:
-                function_throws = None
+
+        function_exits = ctx.functionExits()
+        if function_exits is None:
+            function_exits = type_op("Integer")
+        else:
+            function_exits = self.visit(function_exits)
 
         breaks = {
             "return": return_type
         }
-        if function_throws:
+
+        if function_throws is not NO_THROWS:
             breaks["exception"] = function_throws
+        if function_exits is not NO_EXIT:
+            breaks["exit"] = function_exits
 
         return decompose_function(
             argument_type,
@@ -574,10 +615,10 @@ class RDHLang4Visitor(langVisitor):
             return_type = self.visit(return_type)
         elif len(possible_argument_and_return_type) == 1:
             argument_type = self.visit(possible_argument_and_return_type[0])
-            return_type = type("Inferred")
+            return_type = type_op("Inferred")
         else:
-            argument_type = type("Void")
-            return_type = type("Inferred")
+            argument_type = type_op("Void")
+            return_type = type_op("Inferred")
 
         return (argument_type, return_type)
 
@@ -585,4 +626,7 @@ class RDHLang4Visitor(langVisitor):
         if ctx.expression():
             return self.visit(ctx.expression())
         else:
-            return MISSING
+            return NO_THROWS
+
+    def visitFunctionExits(self, ctx):
+        return NO_EXIT

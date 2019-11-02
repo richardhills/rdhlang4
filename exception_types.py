@@ -25,4 +25,5 @@ class DataIntegrityError(Exception):
 class PreparationException(Exception):
     pass
 
-
+class InvalidApplicationException(Exception):
+    pass

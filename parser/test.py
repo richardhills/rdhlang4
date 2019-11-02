@@ -10,7 +10,7 @@ from unittest.case import TestCase
 from parser.rdhparser import parse
 from parser.visitor import comma_op, literal_op, break_op, addition_op, \
     object_type, function_type, prepare_op, new_object_op, \
-    assignment_op, symbolic_dereference_ops, type, merge_op, function_literal, \
+    assignment_op, symbolic_dereference_ops, type_op, merge_op, function_literal, \
     catch_op, jump_op, nop, symbolic_dereference_ops, dereference_op,\
     transform_op
 from type_system.core_types import IntegerType
@@ -60,17 +60,17 @@ class TestFunctionParsing(TestCase):
 
     def test_empty_function(self):
         ast = parse("""
-            function () nothrow { }
+            function () nothrow noexit { }
         """)
         self.assertEquals(
             ast,
             {
                 "static": new_object_op({
                     "breaks": new_object_op({
-                        "return": type("Inferred")
+                        "return": type_op("Inferred")
                     }),
                     "local": object_type({}),
-                    "argument": type("Void"),
+                    "argument": type_op("Void"),
                 }),
                 "local_initializer": new_object_op({}),
             }
@@ -78,15 +78,15 @@ class TestFunctionParsing(TestCase):
 
     def test_simple_assignment_function(self):
         ast = parse("""
-            function() nothrow { local = 42; }
+            function() nothrow noexit { local = 42; }
         """)
         CORRECT = {
             "static": new_object_op({
                 "breaks": new_object_op({
-                    "return": type("Inferred")
+                    "return": type_op("Inferred")
                 }),
                 "local": object_type({}),
-                "argument": type("Void")
+                "argument": type_op("Void")
             }),
             "local_initializer": new_object_op({}),
             "code": assignment_op(
@@ -98,15 +98,15 @@ class TestFunctionParsing(TestCase):
 
     def test_simple_return_function(self):
         ast = parse("""
-            function() nothrow { return 42; }
+            function() nothrow noexit { return 42; }
         """)
         CORRECT = {
             "static": new_object_op({
                 "breaks": new_object_op({
-                    "return": type("Inferred")
+                    "return": type_op("Inferred")
                 }),
                 "local": object_type({}),
-                "argument": type("Void")
+                "argument": type_op("Void")
             }),
             "local_initializer": new_object_op({}),
             "code": break_op("return", literal_op(42))
@@ -116,15 +116,15 @@ class TestFunctionParsing(TestCase):
 
     def test_simple_return_function_with_types(self):
         ast = parse("""
-            function(String => Integer) nothrow { return 42; }
+            function(String => Integer) nothrow noexit { return 42; }
         """)
         CORRECT = {
             "static": new_object_op({
                 "breaks": new_object_op({
-                    "return": type("Integer")
+                    "return": type_op("Integer")
                 }),
                 "local": object_type({}),
-                "argument": type("String")
+                "argument": type_op("String")
             }),
             "local_initializer": new_object_op({}),
             "code": break_op("return", literal_op(42))
@@ -134,15 +134,15 @@ class TestFunctionParsing(TestCase):
 
     def test_addition(self):
         ast = parse("""
-            function() nothrow { 4 + 38; }
+            function() nothrow noexit { 4 + 38; }
         """)
         CORRECT = {
             "static": new_object_op({
                 "breaks": new_object_op({
-                    "return": type("Inferred")
+                    "return": type_op("Inferred")
                 }),
                 "local": object_type({}),
-                "argument": type("Void")
+                "argument": type_op("Void")
             }),
             "local_initializer": new_object_op({}),
             "code": addition_op(literal_op(4), literal_op(38))
@@ -154,43 +154,41 @@ class TestFunctionParsing(TestCase):
 class TestLocalVariables(TestCase):
     def test_basic_variable(self):
         ast = parse("""
-            function(Void => Void) nothrow {
+            function(Void => Void) nothrow noexit {
                 Integer foo = 42;
             }
         """)
         CORRECT = {
             "static": new_object_op({
-                "argument": type("Void"),
+                "argument": type_op("Void"),
                 "breaks": new_object_op({
-                    "return": type("Void")
+                    "return": type_op("Void")
                 }),
                 "local": object_type({
-                    "foo": type("Integer")
+                    "foo": type_op("Integer")
                 }),
             }),
             "local_initializer": new_object_op({
                 "foo": literal_op(42)
             })
         }
-        print json.dumps(ast)
-        print json.dumps(CORRECT)
         self.assertEquals(ast, CORRECT)
 
     def test_return_basic_variable(self):
         ast = parse("""
-            function(Void => Integer) nothrow {
+            function(Void => Integer) nothrow noexit {
                 Integer foo = 42;
                 return foo;
             }
         """)
         CORRECT = {
             "static": new_object_op({
-                "argument": type("Void"),
+                "argument": type_op("Void"),
                 "breaks": new_object_op({
-                    "return": type("Integer")
+                    "return": type_op("Integer")
                 }),
                 "local": object_type({
-                    "foo": type("Integer")
+                    "foo": type_op("Integer")
                 }),
             }),
             "code": break_op("return", symbolic_dereference_ops(["foo"])),
@@ -198,25 +196,23 @@ class TestLocalVariables(TestCase):
                 "foo": literal_op(42)
             })
         }
-        print json.dumps(ast)
-        print json.dumps(CORRECT)
         self.assertEquals(ast, CORRECT)
 
     def test_2_local_variables(self):
         ast = parse("""
-            function(Void => Void) nothrow {
+            function(Void => Void) nothrow noexit {
                 Integer foo = 42;
                 String bar = "hello";
             }
         """)
         CORRECT = {
             "static": new_object_op({
-                "argument": type("Void"),
+                "argument": type_op("Void"),
                 "breaks": new_object_op({
-                    "return": type("Void")
+                    "return": type_op("Void")
                 }),
                 "local": object_type({
-                    "foo": type("Integer")
+                    "foo": type_op("Integer")
                 })
             }),
             "local_initializer": new_object_op({
@@ -224,13 +220,13 @@ class TestLocalVariables(TestCase):
             }),
             "code": jump_op(prepare_op(literal_op({
                 "static": new_object_op({
-                    "argument": type("Void"),
+                    "argument": type_op("Void"),
                     "breaks": new_object_op({
-                        "return": type("Void")
+                        "return": type_op("Void")
                     }),
                     "local": object_type({
-                        "foo": type("Integer"),
-                        "bar": type("String")
+                        "foo": type_op("Integer"),
+                        "bar": type_op("String")
                     }),
                 }),
                 "local_initializer": merge_op(
@@ -242,15 +238,12 @@ class TestLocalVariables(TestCase):
             })), nop())
         }
 
-        print json.dumps(ast)
-        print json.dumps(CORRECT)
-
         self.assertEquals(ast, CORRECT)
 
 
     def test_2_local_variables_with_mutation(self):
         ast = parse("""
-            function(Void => Void) nothrow {
+            function(Void => Void) nothrow noexit {
                 Integer foo = 42;
                 foo = foo + 3;
                 String bar = "hello";
@@ -258,12 +251,12 @@ class TestLocalVariables(TestCase):
         """)
         CORRECT = {
             "static": new_object_op({
-                "argument": type("Void"),
+                "argument": type_op("Void"),
                 "breaks": new_object_op({
-                    "return": type("Void")
+                    "return": type_op("Void")
                 }),
                 "local": object_type({
-                    "foo": type("Integer")
+                    "foo": type_op("Integer")
                 })
             }),
             "local_initializer": new_object_op({
@@ -276,13 +269,13 @@ class TestLocalVariables(TestCase):
                 ),
                 jump_op(prepare_op(literal_op({
                     "static": new_object_op({
-                        "argument": type("Void"),
+                        "argument": type_op("Void"),
                         "breaks": new_object_op({
-                            "return": type("Void")
+                            "return": type_op("Void")
                         }),
                         "local": object_type({
-                            "foo": type("Integer"),
-                            "bar": type("String")
+                            "foo": type_op("Integer"),
+                            "bar": type_op("String")
                         })
                     }),
                     "local_initializer": merge_op(
@@ -295,15 +288,12 @@ class TestLocalVariables(TestCase):
             ])
         }
 
-        print json.dumps(ast)
-        print json.dumps(CORRECT)
-
         self.assertEquals(ast, CORRECT)
 
 class TestObjectTypes(TestCase):
     def test_basic_object(self):
         ast = parse("""
-            function(Void => Void) nothrow {
+            function(Void => Void) nothrow noexit {
                 Object {
                     Integer bar;
                 } foo = { bar: 5 };
@@ -312,21 +302,19 @@ class TestObjectTypes(TestCase):
         CORRECT = {
             "static": new_object_op({
                 "breaks": new_object_op({
-                    "return": type("Void")
+                    "return": type_op("Void")
                 }),
                 "local": object_type({
                     "foo": object_type({
-                        "bar": type("Integer")
+                        "bar": type_op("Integer")
                     })
                 }),
-                "argument": type("Void")
+                "argument": type_op("Void")
             }),
             "local_initializer": new_object_op({
                 "foo": new_object_op({ "bar": literal_op(5) })
             })
         }
-        print json.dumps(ast)
-        print json.dumps(CORRECT)
         self.assertEquals(ast, CORRECT)
 
 class TestExtraStatics(TestCase):
@@ -340,23 +328,21 @@ class TestExtraStatics(TestCase):
         CORRECT = {
             "static": new_object_op({
                 "local": object_type({}),
-                "argument": type("Void"),
-                "breaks": new_object_op({ "return": type("Integer") }),
+                "argument": type_op("Void"),
+                "breaks": new_object_op({ "return": type_op("Integer") }),
                 "foo": literal_op(5)
             }),
             "local_initializer": new_object_op({}),
             "code": transform_op(symbolic_dereference_ops(["foo"]), input="value", output="return")
         }
-        print json.dumps(ast)
-        print json.dumps(CORRECT)
         self.assertEquals(ast, CORRECT)
 
 class TestNestedFunctions(TestCase):
 
     def test_nested_function(self):
         ast = parse("""
-            function(Void => Integer) nothrow {
-                Function<Void => Integer> foo = function(Void => Integer) nothrow {
+            function(Void => Integer) nothrow noexit {
+                Function<Void => Integer> noexit foo = function(Void => Integer) nothrow noexit {
                     return 42;
                 };
                 return foo();
@@ -365,22 +351,22 @@ class TestNestedFunctions(TestCase):
         CORRECT = {
             "static": new_object_op({
                 "breaks": new_object_op({
-                    "return": type("Integer")
+                    "return": type_op("Integer")
                 }),
                 "local": object_type({
                     "foo": function_type(
-                        type("Void"), {
-                            "return": type("Integer")
+                        type_op("Void"), {
+                            "return": type_op("Integer")
                         }
                     )
                 }),
-                "argument": type("Void")
+                "argument": type_op("Void")
             }),
             "local_initializer": new_object_op({
                 "foo": prepare_op(literal_op({
                     "static": new_object_op({
-                        "argument": type("Void"),
-                        "breaks": new_object_op({ "return": type("Integer") }),
+                        "argument": type_op("Void"),
+                        "breaks": new_object_op({ "return": type_op("Integer") }),
                         "local": object_type({})
                     }),
                     "local_initializer": new_object_op({}),
@@ -392,8 +378,6 @@ class TestNestedFunctions(TestCase):
                     catch_op("return", jump_op(symbolic_dereference_ops(["foo"]), nop()))
                 )
         }
-        print json.dumps(ast)
-        print json.dumps(CORRECT)
         self.assertEquals(ast, CORRECT)
 
 

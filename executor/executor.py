@@ -6,13 +6,14 @@ from distutils.log import FATAL
 import json
 
 from exception_types import FatalException, PreparationException, \
-    IncompatableAssignmentError, CreateReferenceError
-from parser.visitor import type, nop, literal_op, context_op, \
+    IncompatableAssignmentError, CreateReferenceError, \
+    InvalidApplicationException, DataIntegrityError
+from parser.visitor import type_op, nop, literal_op, context_op, \
     symbolic_dereference_ops
-from type_system.core_types import ObjectType, IntegerType, BooleanType, \
-    OneOfType, VoidType, Type, Object, StringType, UnitType, FunctionType, \
-    AnyType, merge_types, InferredType, infer_primitive_type, \
-    flatten_to_primitive_type
+from type_system.core_types import UnitType, ObjectType, Type, VoidType, \
+    merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
+    InferredType
+from type_system.values import Object, infer_value_type
 from utils import InternalMarker, MISSING, NO_VALUE
 
 
@@ -21,6 +22,8 @@ class BreakException(Exception):
     def __init__(self, mode, value):
         self.mode = mode
         self.value = value
+        if isinstance(value, BreakException):
+            raise DataIntegrityError()
 
 
 class TypeErrorFactory(object):
@@ -104,9 +107,12 @@ class CommaOpcode(Opcode):
 
     def __init__(self, data, visitor):
         super(CommaOpcode, self).__init__(data)
-        self.expressions = [
-            enrich_opcode(e, visitor) for e in self.data["expressions"]
-        ]
+        try:
+            self.expressions = [
+                enrich_opcode(e, visitor) for e in self.data["expressions"]
+            ]
+        except TypeError:
+            pass
 
     def get_break_types(self, context):
         expressions_break_types = []
@@ -210,25 +216,36 @@ class TransformBreak(Opcode):
 
     def __init__(self, data, visitor):
         super(TransformBreak, self).__init__(data)
-        self.expression = enrich_opcode(self.data["code"], visitor)
-        self.input = self.data["input"]
+        if "code" in self.data:
+            self.expression = enrich_opcode(self.data["code"], visitor)
+            self.input = self.data["input"]
+        else:
+            self.expression = None
+            self.input = None
         self.output = self.data["output"]
 
     def get_break_types(self, context):
-        break_types = self.expression.get_break_types(context)
-        if self.input in break_types:
-            break_types[self.output] = break_types.pop(self.input)
+        if self.expression:
+            break_types = self.expression.get_break_types(context)
+            if self.input in break_types:
+                break_types[self.output] = break_types.pop(self.input)
+        else:
+            break_types = {
+                self.output: VoidType()
+            }
         return break_types
 
     def jump(self, context):
-        try:
-            self.expression.jump(context)
-            
-        except BreakException as e:
-            if e.mode == self.input:
-                raise BreakException(self.output, e.value)
-            else:
-                raise
+        if self.expression:
+            try:
+                self.expression.jump(context)
+            except BreakException as e:
+                if e.mode == self.input:
+                    raise BreakException(self.output, e.value)
+                else:
+                    raise
+        else:
+            raise BreakException(self.output, NO_VALUE)
         raise FatalException()
 
 
@@ -255,19 +272,9 @@ class AssignmentOpcode(Opcode):
         reference, of = self.dereference.get_reference_and_of(context)
         new_value = evaluate(self.rvalue, context)
         try:
-            of[reference] = new_value
+            setattr(of, reference, new_value)
         except IncompatableAssignmentError:
             raise self.INVALID_ASSIGNMENT()
-
-
-def guess_literal_value_type(value):
-    if isinstance(value, (int, bool, basestring)):
-        return UnitType(value, is_rev_const=True)
-    if isinstance(value, dict):
-        return ObjectType({
-            k: guess_literal_value_type(v) for k, v in value.items()
-        }, is_rev_const=True)
-    raise PreparationException("Unknown value {}".format(value))
 
 
 def clone_literal_value(value):
@@ -284,7 +291,7 @@ class LiteralValueOpcode(Opcode):
     def __init__(self, data, visitor):
         super(LiteralValueOpcode, self).__init__(data)
         self.value = self.data["value"]
-        self.type = guess_literal_value_type(self.value)
+        self.type = infer_value_type(self.value)
 
     def get_break_types(self, context):
         return {
@@ -312,12 +319,13 @@ class NewObjectOpcode(Opcode):
 
         for property, opcode in self.properties.items():
             property_value_type, other_break_types = get_expression_break_types(opcode, context)
+            property_value_type.is_rev_const = True
             value_type[property] = property_value_type
             other_breaks_types.append(other_break_types)
 
         return merge_break_types(
             other_breaks_types + [{
-                "value": ObjectType(value_type, is_rev_const=True)
+                "value": ObjectType(value_type)
             }]
         )
 
@@ -405,7 +413,7 @@ class AdditionOpcode(Opcode):
         lvalue = evaluate(self.lvalue, context)
         rvalue = evaluate(self.rvalue, context)
         if not isinstance(lvalue, int) or not isinstance(rvalue, int):
-            raise BreakException("exception", self.MISSING_INTEGERS())
+            raise self.MISSING_INTEGERS()
         raise BreakException(
             "value",
             lvalue + rvalue
@@ -443,7 +451,7 @@ class MultiplicationOpcode(Opcode):
         lvalue = evaluate(self.lvalue, context)
         rvalue = evaluate(self.rvalue, context)
         if not isinstance(lvalue, int) or not isinstance(rvalue, int):
-            raise BreakException("exception", self.MISSING_INTEGERS())
+            raise self.MISSING_INTEGERS()
         raise BreakException(
             "value",
             lvalue * rvalue
@@ -504,6 +512,18 @@ class DereferenceOpcode(Opcode):
     def __repr__(self):
         return "Dereference< {}.{} >".format(self.of, self.reference)
 
+def dynamic_get_reference_and_of(context, reference):
+    argument = getattr(context, "argument", MISSING)
+    if argument is not MISSING and isinstance(argument, Object) and reference in argument:
+        return reference, argument
+
+    local = getattr(context, "local", MISSING)
+    if local is not MISSING and isinstance(local, Object) and reference in local:
+        return reference, local
+
+    outer = getattr(context, "outer", MISSING)
+    if outer is not MISSING and isinstance(outer, Object):
+        return dynamic_get_reference_and_of(outer, reference)
 
 class DynamicDereferenceOpcode(Opcode):
     INVALID_DEREFERENCE = TypeErrorFactory("DynamicDereferenceOpcode: invalid_dereference")
@@ -513,7 +533,7 @@ class DynamicDereferenceOpcode(Opcode):
         self.reference = enrich_opcode(self.data["reference"], visitor)
 
     def get_break_types(self, context):
-        reference_type, reference_break_types = get_expression_break_types(self.reference, context)
+        _, reference_break_types = get_expression_break_types(self.reference, context)
 
         break_types = [reference_break_types, {
             "value": AnyType(),
@@ -525,16 +545,12 @@ class DynamicDereferenceOpcode(Opcode):
     def get_reference_and_of(self, context):
         reference = evaluate(self.reference, context)
 
-        argument = getattr(context, "argument", MISSING)
-        if argument is not MISSING and isinstance(argument, Object) and reference in argument:
-            return reference, argument
-
-        local = getattr(context, "local", MISSING)
-        if local is not MISSING and isinstance(local, Object) and reference in local:
-            return reference, local
+        search_result = dynamic_get_reference_and_of(context, reference)
+        if search_result:
+            return search_result
 
         # Fall back on it being a local variable
-        return reference, local
+        return reference, getattr(context, "local", MISSING)
 
     def jump(self, context):
         reference, of = self.get_reference_and_of(context)
@@ -558,7 +574,7 @@ def get_context_type(context):
             value_type["local"] = context.types.local
         if hasattr(context.types, "outer"):
             value_type["outer"] = context.types.outer
-    value_type["static"] = guess_literal_value_type(context.static)
+    value_type["static"] = infer_value_type(context.static)
     return ObjectType(value_type)
 
 
@@ -765,8 +781,12 @@ class PreparedFunction(object):
             })
         })
 
-        self.code = enrich_opcode(self.data["code"], UnboundDereferenceBinder(self.with_argument_and_local_type_context))
-        _, code_break_types = get_expression_break_types(self.code, self.with_argument_and_local_type_context, None)
+        if "code" in self.data:
+            self.code = enrich_opcode(self.data["code"], UnboundDereferenceBinder(self.with_argument_and_local_type_context))
+            _, code_break_types = get_expression_break_types(self.code, self.with_argument_and_local_type_context, None)
+        else:
+            self.code = None
+            code_break_types = {}
 
         break_types_data = self.static.get("breaks", {
             "return": { "type": "Void" }
@@ -819,26 +839,36 @@ class PreparedFunction(object):
             except CreateReferenceError:
                 raise AssignmentOpcode.INVALID_ASSIGNMENT()
 
-            evaluate(self.code, evaluation_context)
+            if self.code:
+                evaluate(self.code, evaluation_context)
         except BreakException as e:
             declared_break_type = self.break_types.get(e.mode, MISSING)
             if declared_break_type is MISSING:
+                raise FatalException("Function broke with {} ({}) but this was not declared".format(e.mode, e.value))
+            if not declared_break_type.is_copyable_from(infer_value_type(e.value)):
                 raise FatalException()
-            if not flatten_to_primitive_type(declared_break_type).is_copyable_from(infer_primitive_type(e.value)):
-                raise FatalException()
-            if isinstance(e.value, Object) and not e.value.is_new_type_reference_legal(declared_break_type):
-                raise FatalException()
+#            if not flatten_to_primitive_type(declared_break_type).is_copyable_from(infer_primitive_type(e.value)):
+#                raise FatalException()
+#            if isinstance(e.value, Object) and not e.value.is_new_type_reference_legal(declared_break_type):
+#                raise FatalException()
             raise
+
+        raise FatalException("Function did not exit")
 
     def invoke(self, argument=NO_VALUE):
         try:
             self.jump(argument)
         except BreakException as e:
-            if e.mode == "return":
+            if e.mode == "return" or e.mode == "exit":
                 return e.value
             else:
                 raise
 
+
+def enforce_application_break_mode_constraints(function):
+    exit_break_type = function.break_types.get("exit", None)
+    if exit_break_type and not IntegerType().is_copyable_from(exit_break_type):
+        raise InvalidApplicationException("Application exits with {}, when Integer is expected".format(exit_break_type))
 
 def execute(ast):
     executor = PreparedFunction(ast)

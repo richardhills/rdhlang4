@@ -4,8 +4,8 @@
 grammar lang;
 
 code
-   : literal
-   | statement
+   : literal			# toLiteral
+   | (statement ';')*   # toStatementList
    ;
 
 newObject
@@ -70,6 +70,7 @@ statement
    : expression SYMBOL '=' expression # localVariableDeclaration
    | 'static' SYMBOL '=' expression # staticValueDeclaration
    | 'typedef' expression SYMBOL # typedef
+   | 'exit' expression # exit
    | expression # toExpression
    ;
 
@@ -90,7 +91,7 @@ stringType
    ;
 
 functionType
-   : 'Function' '<' expression '=>' expression '>'
+   : 'Function' '<' expression '=>' expression '>' functionExits?
    ;
 
 objectType
@@ -106,7 +107,7 @@ propertyType
    ;
 
 functionLiteral
-   : 'function' functionArgumentAndReturns functionThrows? '{' (statement ';')* '}'
+   : 'function' functionArgumentAndReturns functionThrows? functionExits? '{' (statement ';')* '}'
    ;
 
 functionArgumentAndReturns
@@ -118,6 +119,10 @@ functionArgumentAndReturns
 functionThrows
    : 'nothrow'
    | 'throws' expression
+   ;
+
+functionExits
+   : 'noexit'
    ;
 
 returnExpression

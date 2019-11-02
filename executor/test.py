@@ -7,12 +7,27 @@ from unittest.case import TestCase
 
 from executor.executor import PreparedFunction, PreparationException, \
     BreakException
-from parser.rdhparser import parse
-from type_system.core_types import ObjectType, Object, IntegerType
+from parser.rdhparser import parse, prepare_code
+from type_system.core_types import ObjectType, IntegerType
 
 
 class TestExecutor(TestCase):
     maxDiff = 65536
+
+    def test_prepare_function(self):
+        function = prepare_code("""
+            function(Void => Integer) {
+                return 42;
+            }
+        """)
+        self.assertEquals(function.invoke(), 42)
+
+    def test_prepare_code(self):
+        function = prepare_code("""
+            exit 42;
+        """)
+        self.assertEquals(function.invoke(), 42)
+
 
     def test_return_number(self):
         ast = parse("""
@@ -20,7 +35,6 @@ class TestExecutor(TestCase):
                 return 42;
             }
         """)
-        print json.dumps(ast)
         function = PreparedFunction(ast)
         self.assertEquals(function.invoke(), 42)
 
@@ -61,7 +75,6 @@ class TestExecutor(TestCase):
                 return baz;
             }
         """)
-        print json.dumps(ast)
         function = PreparedFunction(ast)
         self.assertEquals(function.invoke(), 42)
 
@@ -75,7 +88,6 @@ class TestExecutor(TestCase):
                 return baz;
             }
         """)
-        print json.dumps(ast)
         function = PreparedFunction(ast)
         self.assertEquals(function.invoke(), 42)
 
@@ -172,6 +184,41 @@ class TestExecutor(TestCase):
         self.assertTrue(isinstance(function.break_types["exception"], ObjectType))
         self.assertEquals(function.invoke(), 42)
 
+    def test_python_reassignment_code(self):
+        ast = parse("""
+            function(Void => Any) {
+                foo = "hello world";
+                foo = 42;
+                return foo;
+            }
+        """)
+        function = PreparedFunction(ast)
+        self.assertTrue(isinstance(function.break_types["exception"], ObjectType))
+        self.assertEquals(function.invoke(), 42)
+
+    def test_broken_assignment(self):
+        ast = parse("""
+            function(Void => Any) {
+                String foo = "hello world";
+                foo = 42;
+                return foo;
+            }
+        """)
+        function = PreparedFunction(ast)
+        with self.assertRaises(BreakException):
+            function.invoke()
+
+    def test_inferred_primitive_types(self):
+        ast = parse("""
+            function(Void => Integer) nothrow {
+                var foo = 42;
+                return foo;
+            }
+        """)
+        function = PreparedFunction(ast)
+        self.assertEquals(function.invoke(), 42)
+ 
+
     def test_doubler(self):
         ast = parse("""
             function(Void => Integer) {
@@ -226,10 +273,10 @@ class TestExecutor(TestCase):
                     };
                 };
 
-                return squarer(squarer(squarer(fiver)))();
+                IntMaker newfunction = squarer(squarer(squarer(fiver)));
+                return newfunction();
             }
         """)
-        print json.dumps(ast)
         function = PreparedFunction(ast)
         self.assertEquals(function.invoke(), ((5 ** 2) ** 2) ** 2)
 
@@ -252,7 +299,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.break_types, { "return": IntegerType() })
+        self.assertEquals(function.break_types, { "return": IntegerType(), "exit": IntegerType() })
         self.assertEquals(function.invoke(), ((5 ** 2) ** 2) ** 2)
 
 class TestExtraStatics(TestCase):
@@ -274,7 +321,6 @@ class TestExtraStatics(TestCase):
                 return foo.bar;
             }
         """)
-        print json.dumps(ast)
         function = PreparedFunction(ast)
         self.assertEquals(function.invoke(), 42)
 
@@ -286,13 +332,12 @@ class TestExtraStatics(TestCase):
                 return foo.bar;
             }
         """)
-        print json.dumps(ast)
         function = PreparedFunction(ast)
         self.assertEquals(function.invoke(), 42)
 
 
 
-class TextPreparationErrors(TestCase):
+class TestPreparationErrors(TestCase):
     def test_invalid_code_fail_at_preparation(self):
         ast = parse("""
             function(Void => Integer) nothrow {
@@ -324,4 +369,7 @@ class TextPreparationErrors(TestCase):
         function = PreparedFunction(ast)
         with self.assertRaises(BreakException) as cm:
             function.invoke()
-        
+
+#class TestMiscelaneous(TestCase):
+#    def test1(self):
+

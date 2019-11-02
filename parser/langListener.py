@@ -4,12 +4,21 @@ from antlr4 import *
 # This class defines a complete listener for a parse tree produced by langParser.
 class langListener(ParseTreeListener):
 
-    # Enter a parse tree produced by langParser#code.
-    def enterCode(self, ctx):
+    # Enter a parse tree produced by langParser#toLiteral.
+    def enterToLiteral(self, ctx):
         pass
 
-    # Exit a parse tree produced by langParser#code.
-    def exitCode(self, ctx):
+    # Exit a parse tree produced by langParser#toLiteral.
+    def exitToLiteral(self, ctx):
+        pass
+
+
+    # Enter a parse tree produced by langParser#toStatementList.
+    def enterToStatementList(self, ctx):
+        pass
+
+    # Exit a parse tree produced by langParser#toStatementList.
+    def exitToStatementList(self, ctx):
         pass
 
 
@@ -301,6 +310,15 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#exit.
+    def enterExit(self, ctx):
+        pass
+
+    # Exit a parse tree produced by langParser#exit.
+    def exitExit(self, ctx):
+        pass
+
+
     # Enter a parse tree produced by langParser#toExpression.
     def enterToExpression(self, ctx):
         pass
@@ -406,6 +424,15 @@ class langListener(ParseTreeListener):
 
     # Exit a parse tree produced by langParser#functionThrows.
     def exitFunctionThrows(self, ctx):
+        pass
+
+
+    # Enter a parse tree produced by langParser#functionExits.
+    def enterFunctionExits(self, ctx):
+        pass
+
+    # Exit a parse tree produced by langParser#functionExits.
+    def exitFunctionExits(self, ctx):
         pass
 
 
