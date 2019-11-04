@@ -10,35 +10,43 @@ from exception_types import DataIntegrityError, IncompatableAssignmentError, \
     CreateReferenceError, FatalException
 from utils import InternalMarker, MISSING, NO_VALUE
 from prompt_toolkit.key_binding.bindings.named_commands import self_insert
+from pickle import FALSE
+
+def are_bindable(first, second, first_is_rev_const, second_is_rev_const):
+    """
+    Returns True if a name of type self and another name of type other can be bound together.
+
+    Two names can't be bound if a mutation by either party, within the constraints of that
+    party, would invalidate the constraints of the other party. Therefore, it is a symmetrical
+    test. foo.is_bindable_to(bar) = bar.is_bindable_to(foo).
+
+    This is highly related to copyability. A type X can be copied to type Y as long as the 
+    shallow constraints on Y are broader than those on X, and the deeper constraints on Y
+    are equal to X.
+    """
+    if not isinstance(first, Type):
+        raise DataIntegrityError()
+    if not isinstance(second, Type):
+        raise DataIntegrityError()
+
+    if not first.is_const and not second_is_rev_const:
+        if not second.is_copyable_from(first):
+            return False
+    if not second.is_const and not first_is_rev_const:
+        if not first.is_copyable_from(second):
+            return False
+    return True
+
+def are_common_properties_compatible(first, second):
+    for property_name in set(first.property_types.keys()) & set(second.property_types.keys()):
+        if not are_bindable(first.property_types[property_name], second.property_types[property_name], first.is_rev_const, second.is_rev_const):
+            return False
+    return True
 
 class Type(object):
 
-    def __init__(self, is_const=False, is_rev_const=False):
+    def __init__(self, is_const=False):
         self.is_const = is_const
-        self.is_rev_const = is_rev_const
-
-    def is_bindable_to(self, other):
-        """
-        Returns True if a name of type self and another name of type other can be bound together.
-
-        Two names can't be bound if a mutation by either party, within the constraints of that
-        party, would invalidate the constraints of the other party. Therefore, it is a symmetrical
-        test. foo.is_bindable_to(bar) = bar.is_bindable_to(foo).
-
-        This is highly related to copyability. A type X can be copied to type Y as long as the 
-        shallow constraints on Y are broader than those on X, and the deeper constraints on Y
-        are equal to X.
-        """
-        if not isinstance(other, Type):
-            raise DataIntegrityError()
-
-        if not self.is_const and not other.is_rev_const:
-            if not other.is_copyable_from(self):
-                return False
-        if not other.is_const and not self.is_rev_const:
-            if not self.is_copyable_from(other):
-                return False
-        return True
 
     def is_copyable_from(self, other):
         raise NotImplementedError()
@@ -209,7 +217,7 @@ def dedupe_types(types):
             if t1 is not t2:
                 if t1.is_copyable_from(t2):
                     types_to_drop.add(t2)
-                if t1.is_bindable_to(t2):
+                if are_bindable(t1, t2, False, False):
                     types_to_keep.add(t1 if i1 > i2 else t2)
 
     return list((set(types) - types_to_drop) | types_to_keep)
@@ -261,10 +269,11 @@ class OneOfType(Type):
 
 class ObjectType(Type):
 
-    def __init__(self, property_types, *args, **kwargs):
+    def __init__(self, property_types, is_rev_const, *args, **kwargs):
         super(ObjectType, self).__init__(*args, **kwargs)
         # { foo: IntegerType, bar: StringType ...}
         self.property_types = dict(property_types)
+        self.is_rev_const = is_rev_const
         for property_name, property_type in self.property_types.items():
             if not isinstance(property_name, basestring) or not isinstance(property_type, Type):
                 raise DataIntegrityError()
@@ -272,26 +281,10 @@ class ObjectType(Type):
     def is_copyable_from(self, other):
         if not isinstance(other, ObjectType):
             return False
-        # At compile time, each property on my version must be *exactly* the same as the other party, because:
-        # 1. If either of us has a broader type than the other, they could, later, break the reference
-        # 2. There might be extra properties on the object at run time, and we shouldn't assume anything about them
-        for our_property_name, our_property_type in self.property_types.items():
-            other_property_type = other.property_types.get(our_property_name, MISSING)
-            if other_property_type is MISSING:
-                return False
-
-            if not our_property_type.is_bindable_to(other_property_type):
-                return False
-
-#             # Stop us from mutating it when we're not allowed
-#             if other_property_type.is_const and not our_property_type.is_const:
-#                 return False
-#             # Stop us from mutating later it when the other side has a more specific idea on the type than we do
-#             if not other_property_type.is_bindable_to(our_property_type) and not our_property_type.is_const:
-#                 return False
-#             # Stop the other side from mutating it later when we have a more specific idea on the type
-#             if not our_property_type.is_bindable_to(other_property_type):
-#                 return False
+        if not are_common_properties_compatible(self, other):
+            return False
+        if set(self.property_types.keys()) - set(other.property_types.keys()) != set():
+            return False
         return True
 
     def replace_inferred_types(self, other):
@@ -300,7 +293,7 @@ class ObjectType(Type):
         return ObjectType({
             property_name: property_type.replace_inferred_types(other.property_types[property_name])
             for property_name, property_type in self.property_types.items()
-        })
+        }, False)
 
     def get_crystal_value(self):
         from type_system.values import Object
@@ -355,6 +348,15 @@ class FunctionType(Type):
                 return False
 
         return True
+
+    def to_dict(self):
+        return {
+            "type": "Function",
+            "argument": self.argument_type.to_dict(),
+            "breaks": {
+                mode: type.to_dict() for (mode, type) in self.break_types.items()
+            }
+        }
 
     def __repr__(self):
         return "Function<{} => {}>".format(self.argument_type, self.break_types)

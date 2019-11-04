@@ -13,7 +13,7 @@ from parser.visitor import type_op, nop, literal_op, context_op, \
 from type_system.core_types import UnitType, ObjectType, Type, VoidType, \
     merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
     InferredType
-from type_system.values import Object, infer_value_type
+from type_system.values import Object, create_crystal_type
 from utils import InternalMarker, MISSING, NO_VALUE
 
 
@@ -45,7 +45,7 @@ class TypeErrorFactory(object):
         }
         if self.message:
             properties["message"] = UnitType(self.message)
-        return ObjectType(properties)
+        return ObjectType(properties, True)
 
 
 def merge_break_types(breaks_types):
@@ -291,7 +291,7 @@ class LiteralValueOpcode(Opcode):
     def __init__(self, data, visitor):
         super(LiteralValueOpcode, self).__init__(data)
         self.value = self.data["value"]
-        self.type = infer_value_type(self.value)
+        self.type = create_crystal_type(self.value, True)
 
     def get_break_types(self, context):
         return {
@@ -319,13 +319,12 @@ class NewObjectOpcode(Opcode):
 
         for property, opcode in self.properties.items():
             property_value_type, other_break_types = get_expression_break_types(opcode, context)
-            property_value_type.is_rev_const = True
             value_type[property] = property_value_type
             other_breaks_types.append(other_break_types)
 
         return merge_break_types(
             other_breaks_types + [{
-                "value": ObjectType(value_type)
+                "value": ObjectType(value_type, True)
             }]
         )
 
@@ -358,13 +357,13 @@ class MergeOpcode(Opcode):
         if isinstance(first_value_type, ObjectType) and isinstance(second_value_type, ObjectType):
             combined_value_type = ObjectType({
                 property: type for property, type in first_value_type.property_types.items() + second_value_type.property_types.items()
-            })
+            }, True)
             break_types.append({
                 "value": combined_value_type
             })
         else:
             break_types.append({
-                "value": ObjectType({}),
+                "value": ObjectType({}, True),
                 "exception": self.MISSING_OBJECTS.get_type()
             })
 
@@ -574,8 +573,8 @@ def get_context_type(context):
             value_type["local"] = context.types.local
         if hasattr(context.types, "outer"):
             value_type["outer"] = context.types.outer
-    value_type["static"] = infer_value_type(context.static)
-    return ObjectType(value_type)
+    value_type["static"] = create_crystal_type(context.static, False)
+    return ObjectType(value_type, False)
 
 
 class ContextOpcode(Opcode):
@@ -644,7 +643,7 @@ def create_function_type_from_data(data):
 
 TYPES = {
     "Any": lambda data: AnyType(),
-    "Object": lambda data: ObjectType({ name: enrich_type(type) for name, type in data["properties"].items() }),
+    "Object": lambda data: ObjectType({ name: enrich_type(type) for name, type in data["properties"].items() }, False),
     "Integer": lambda data: IntegerType(),
     "Boolean": lambda data: BooleanType(),
     "Void": lambda data: VoidType(),
@@ -832,10 +831,10 @@ class PreparedFunction(object):
                 "local": self.local_type,
                 "argument": self.argument_type,
                 "outer": self.outer_context_type
-            })
+            }, False)
 
             try:
-                evaluation_context.create_reference(context_type)
+                evaluation_context.create_reference(context_type, False)
             except CreateReferenceError:
                 raise AssignmentOpcode.INVALID_ASSIGNMENT()
 
@@ -845,12 +844,8 @@ class PreparedFunction(object):
             declared_break_type = self.break_types.get(e.mode, MISSING)
             if declared_break_type is MISSING:
                 raise FatalException("Function broke with {} ({}) but this was not declared".format(e.mode, e.value))
-            if not declared_break_type.is_copyable_from(infer_value_type(e.value)):
+            if not declared_break_type.is_copyable_from(create_crystal_type(e.value, True)):
                 raise FatalException()
-#            if not flatten_to_primitive_type(declared_break_type).is_copyable_from(infer_primitive_type(e.value)):
-#                raise FatalException()
-#            if isinstance(e.value, Object) and not e.value.is_new_type_reference_legal(declared_break_type):
-#                raise FatalException()
             raise
 
         raise FatalException("Function did not exit")

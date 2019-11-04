@@ -7,7 +7,8 @@ import unittest.main
 
 from exception_types import CreateReferenceError
 from type_system.core_types import IncompatableAssignmentError, merge_types, \
-    OneOfType, ObjectType, IntegerType, BooleanType, AnyType, UnitType
+    OneOfType, ObjectType, IntegerType, BooleanType, AnyType, UnitType,\
+    are_bindable
 from type_system.values import Object
 
 
@@ -23,12 +24,12 @@ class TestCompileTimeChecks(TestCase):
         foo = ObjectType({
             "bar": IntegerType(),
             "baz": BooleanType()
-        })
+        }, False)
 
         other_foo = ObjectType({
             "bar": IntegerType(),
             "baz": BooleanType()
-        })
+        }, False)
 
         self.assertTrue(foo.is_copyable_from(other_foo))
 
@@ -36,12 +37,12 @@ class TestCompileTimeChecks(TestCase):
         foo = ObjectType({
             "bar": IntegerType(),
             "baz": BooleanType()
-        })
+        }, False)
 
         other_foo = ObjectType({
             "bar": IntegerType(),
             "baz": IntegerType()
-        })
+        }, False)
 
         # This fails because it would allow me to do:
         # foo.baz = True
@@ -51,12 +52,12 @@ class TestCompileTimeChecks(TestCase):
         foo = ObjectType({
             "bar": IntegerType(),
             "baz": AnyType()
-        })
+        }, False)
 
         other_foo = ObjectType({
             "bar": IntegerType(),
             "baz": IntegerType()
-        })
+        }, False)
 
         # This fails because it would allow me to do:
         # foo.baz = "hello, how are you"
@@ -66,12 +67,12 @@ class TestCompileTimeChecks(TestCase):
         foo = ObjectType({
             "bar": IntegerType(),
             "baz": AnyType(is_const=True)
-        })
+        }, False)
 
         other_foo = ObjectType({
             "bar": IntegerType(),
             "baz": IntegerType()
-        })
+        }, False)
 
         # Like the previous case, but with foo.baz explicitely blocked by const
         self.assertTrue(foo.is_copyable_from(other_foo))
@@ -80,13 +81,13 @@ class TestCompileTimeChecks(TestCase):
         foo = ObjectType({
             "bar": IntegerType(),
             "baz": BooleanType()
-        })
+        }, False)
 
         other_foo = ObjectType({
             "bar": IntegerType(),
             "baz": BooleanType(),
             "bam": IntegerType()
-        })
+        }, False)
 
         self.assertTrue(foo.is_copyable_from(other_foo))
 
@@ -94,30 +95,29 @@ class TestCompileTimeChecks(TestCase):
         foo = ObjectType({
             "bar": IntegerType(),
             "baz": BooleanType()
-        })
+        }, False)
 
         other_foo = ObjectType({
             "bar": IntegerType(),
             "baz": BooleanType(),
             "bam": IntegerType()
-        })
+        }, False)
 
         # This fails because foo and bar are now names for the same reference,
         # so foo = { "bar": 2, "baz": True } will work, breaking other_foo
-        self.assertFalse(foo.is_bindable_to(other_foo))
-
+        self.assertFalse(are_bindable(foo, other_foo, False, False))
 
     def test_failed_contraviant_with_extra_fields_compile_time_object_assignment(self):
         foo = ObjectType({
             "bar": IntegerType(),
             "baz": BooleanType(),
             "bam": IntegerType()
-        })
+        }, False)
 
         other_foo = ObjectType({
             "bar": IntegerType(),
             "baz": BooleanType()
-        })
+        }, False)
 
         # This fails because it would allow me to do:
         # foo.bam - which is undefined
@@ -127,14 +127,14 @@ class TestCompileTimeChecks(TestCase):
         foo = ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        })
+            }, False)
+        }, False)
 
         other_foo = ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        })
+            }, False)
+        }, False)
 
         self.assertTrue(foo.is_copyable_from(other_foo))
 
@@ -142,14 +142,14 @@ class TestCompileTimeChecks(TestCase):
         foo = ObjectType({
             "bar": ObjectType({
                 "baz": BooleanType()
-            })
-        })
+            }, False)
+        }, False)
 
         other_foo = ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        })
+            }, False)
+        }, False)
 
         # This fails because it would allow me to do:
         # foo.bar.baz = True
@@ -161,14 +161,14 @@ class TestCompileTimeChecks(TestCase):
         foo = ObjectType({
             "bar": ObjectType({
                 "baz": AnyType()
-            })
-        })
+            }, False)
+        }, False)
 
         other_foo = ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        })
+            }, False)
+        }, False)
 
         # This fails because it would allow me to do:
         # foo.bar.baz = "hello, how are you?"
@@ -180,14 +180,14 @@ class TestCompileTimeChecks(TestCase):
         foo = ObjectType({
             "bar": ObjectType({
                 "baz": AnyType()
-            }, is_const=True)
-        })
+            }, False, is_const=True)
+        }, False)
 
         other_foo = ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        })
+            }, False)
+        }, False)
 
         # This fails because it would allow me to do:
         # foo.bar.baz = "hello, how are you?"
@@ -199,14 +199,14 @@ class TestCompileTimeChecks(TestCase):
         foo = ObjectType({
             "bar": ObjectType({
                 "baz": AnyType()
-            }, is_const=True)
-        })
+            }, False, is_const=True)
+        }, False)
 
         other_foo = ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        })
+            }, False)
+        }, False)
 
         # This fails because it would allow me to do:
         # foo.bar = { baz: "wazup?" }
@@ -218,14 +218,14 @@ class TestCompileTimeChecks(TestCase):
         foo = ObjectType({
             "bar": ObjectType({
                 "baz": AnyType(is_const=True)
-            }, is_const=True)
-        })
+            }, False, is_const=True)
+        }, False)
 
         other_foo = ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        })
+            }, False)
+        }, False)
 
         # Like the previous 3 cases, but the 2 error cases are both blocked explicitely by the const
         self.assertTrue(foo.is_copyable_from(other_foo))
@@ -234,15 +234,15 @@ class TestCompileTimeChecks(TestCase):
         foo = ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        })
+            }, False)
+        }, False)
 
         other_foo = ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType(),
                 "bam": BooleanType()
-            })
-        })
+            }, False)
+        }, False)
 
         # This fails because it would allow me to do
         # foo.bar = { "baz": 123 }
@@ -252,15 +252,15 @@ class TestCompileTimeChecks(TestCase):
         foo = ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            }, is_const=True)
-        })
+            }, False, is_const=True)
+        }, False)
 
         other_foo = ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType(),
                 "bam": BooleanType()
-            })
-        })
+            }, False)
+        }, False)
 
         # Like the previous case, but with foo.bar = ... blocked by the const
         self.assertTrue(foo.is_copyable_from(other_foo))
@@ -270,14 +270,14 @@ class TestCompileTimeChecks(TestCase):
             "bar": ObjectType({
                 "baz": IntegerType(),
                 "bam": BooleanType()
-            })
-        })
+            }, False)
+        }, False)
 
         other_foo = ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        })
+            }, False)
+        }, False)
 
         # This fails because it would allow me to do
         # foo.bar.bam - which is undefined
@@ -308,23 +308,23 @@ class TestCompileTimeUnitTypeChecks(TestCase):
     def test_successful_composite_assignment(self):
         foo = ObjectType({
             "foo": IntegerType()
-        })
+        }, False)
         other_foo = ObjectType({
-            "foo": UnitType(5, is_rev_const=True)
-        })
+            "foo": UnitType(5)
+        }, True)
         self.assertTrue(foo.is_copyable_from(other_foo))
 
     def  test_successful_nested_assignment(self):
         foo = ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        })
+            }, False)
+        }, False)
         other_foo = ObjectType({
             "bar": ObjectType({
-                "baz": UnitType(5, is_rev_const=True)
-            })
-        })
+                "baz": UnitType(5)
+            }, True)
+        }, False)
         self.assertTrue(foo.is_copyable_from(other_foo))
 
 
@@ -399,7 +399,7 @@ class TestRuntimeMutationChecks(TestCase):
 
         foo.create_reference(ObjectType({
             "bar": IntegerType()
-        }))
+        }, False), False)
 
         foo.bar = 6
 
@@ -410,7 +410,7 @@ class TestRuntimeMutationChecks(TestCase):
 
         foo.create_reference(ObjectType({
             "bar": IntegerType()
-        }))
+        }, False), False)
 
         with self.assertRaises(IncompatableAssignmentError):
             foo.bar = "hello"
@@ -425,8 +425,8 @@ class TestRuntimeMutationChecks(TestCase):
         foo.create_reference(ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        }))
+            }, False)
+        }, False), False)
 
         foo.bar = Object({
             "baz": 42
@@ -447,8 +447,8 @@ class TestRuntimeMutationChecks(TestCase):
         foo.create_reference(ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        }))
+            }, False)
+        }, False), False)
 
         with self.assertRaises(IncompatableAssignmentError):
             foo.bar = replacement_bar
@@ -463,8 +463,8 @@ class TestRuntimeMutationChecks(TestCase):
         foo.create_reference(ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        }))
+            }, False)
+        }, False), False)
 
         replacement_bar = Object({
             "baz": 42
@@ -472,7 +472,7 @@ class TestRuntimeMutationChecks(TestCase):
 
         replacement_bar.create_reference(ObjectType({
             "baz": AnyType()
-        }))
+        }, False), False)
 
         # Fails because the second reference on replacement_bar would allow
         # replacement_bar.baz = "hello" which would in turn invalidate the
@@ -489,7 +489,7 @@ class TestRuntimeCastingChecks(TestCase):
 
         foo.create_reference(ObjectType({
             "bar": IntegerType()
-        }))
+        }, False), False)
 
     def test_successful_single_create_reference_with_unused_properties(self):
         foo = Object({
@@ -499,7 +499,7 @@ class TestRuntimeCastingChecks(TestCase):
 
         foo.create_reference(ObjectType({
             "bar": IntegerType()
-        }))
+        }, False), False)
 
     def test_successful_single_create_reference_with_broad_properties(self):
         foo = Object({
@@ -510,7 +510,7 @@ class TestRuntimeCastingChecks(TestCase):
         # and we can modify it too. This is not possible in static or dynamic programming
         foo.create_reference(ObjectType({
             "bar": AnyType()
-        }))
+        }, False), False)
 
     def test_failure_single_create_multiple_references_with_broad_but_different_properties(self):
         foo = Object({
@@ -523,11 +523,11 @@ class TestRuntimeCastingChecks(TestCase):
         # Integer baz = foo.bar
         foo.create_reference(ObjectType({
             "bar": AnyType()
-        }))
+        }, False), False)
         with self.assertRaises(CreateReferenceError):
             foo.create_reference(ObjectType({
                 "bar": IntegerType()
-            }))
+            }, False), False)
 
     def test_success_single_create_multiple_references(self):
         foo = Object({
@@ -536,10 +536,10 @@ class TestRuntimeCastingChecks(TestCase):
 
         foo.create_reference(ObjectType({
             "bar": IntegerType()
-        }))
+        }, False), False)
         foo.create_reference(ObjectType({
             "bar": IntegerType()
-        }))
+        }, False), False)
 
     def test_failed_single_create_reference_with_extra_properties(self):
         foo = Object({
@@ -551,7 +551,7 @@ class TestRuntimeCastingChecks(TestCase):
             foo.create_reference(ObjectType({
                 "bar": IntegerType(),
                 "baz": BooleanType()
-            }))
+            }, False), False)
 
     def test_successful_single_create_nested_reference(self):
         foo = Object({
@@ -563,8 +563,8 @@ class TestRuntimeCastingChecks(TestCase):
         foo.create_reference(ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        }))
+            }, False)
+        }, False), False)
 
     def test_failed_single_create_nested_reference_with_wrong_type(self):
         foo = Object({
@@ -579,8 +579,8 @@ class TestRuntimeCastingChecks(TestCase):
             foo.create_reference(ObjectType({
                 "bar": ObjectType({
                     "baz": BooleanType()
-                })
-            }))
+                }, False)
+            }, False), False)
 
     def test_succeeded_single_create_nested_reference_with_broad_type(self):
         foo = Object({
@@ -593,8 +593,8 @@ class TestRuntimeCastingChecks(TestCase):
         foo.create_reference(ObjectType({
             "bar": ObjectType({
                 "baz": AnyType()
-            })
-        }))
+            }, False)
+        }, False), False)
 
     def test_succeeded_create_nested_any_reference(self):
         foo = Object({
@@ -606,7 +606,7 @@ class TestRuntimeCastingChecks(TestCase):
         # Allowed because no one else has a reference to this object yet
         foo.create_reference(ObjectType({
             "bar": AnyType()
-        }))
+        }, False), False)
 
     def test_failed_create_multiple_different_nested_references(self):
         foo = Object({
@@ -618,15 +618,15 @@ class TestRuntimeCastingChecks(TestCase):
         # Allowed because no one else has a reference to this object yet
         foo.create_reference(ObjectType({
             "bar": AnyType()
-        }))
+        }, False), False)
 
         with self.assertRaises(CreateReferenceError):
             # Fails because the previous reference could do foo.bar = "hello"
             foo.create_reference(ObjectType({
                 "bar": ObjectType({
                     "baz": IntegerType()
-                })
-            }))
+                }, False)
+            }, False), False)
 
     def test_succeeded_create_multiple_different_nested_references_with_const(self):
         foo = Object({
@@ -637,14 +637,14 @@ class TestRuntimeCastingChecks(TestCase):
 
         foo.create_reference(ObjectType({
             "bar": AnyType(is_const=True)
-        }))
+        }, False), False)
 
         # Allowed because the previous reference is broad but const
         foo.create_reference(ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        }))
+            }, False)
+        }, False), False)
 
     def test_successful_create_multiple_different_nested_references_in_reverse_order_with_const(self):
         foo = Object({
@@ -656,12 +656,12 @@ class TestRuntimeCastingChecks(TestCase):
         foo.create_reference(ObjectType({
             "bar": ObjectType({
                 "baz": IntegerType()
-            })
-        }))
+            }, False)
+        }, False), False)
 
         foo.create_reference(ObjectType({
             "bar": AnyType(is_const=True)
-        }))
+        }, False), False)
 
 
 if __name__ == '__main__':

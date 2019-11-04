@@ -370,6 +370,26 @@ class TestPreparationErrors(TestCase):
         with self.assertRaises(BreakException) as cm:
             function.invoke()
 
-#class TestMiscelaneous(TestCase):
-#    def test1(self):
-
+# class TestMiscelaneous(TestCase):
+#     # Tests I've found don't work when playing.
+#     def test1(self):
+#         function = prepare_code("""foo = function() {};""");
+#         function.invoke()
+# 
+#     def test2(self):
+#         function = prepare_code("""var foo = function() {};""");
+#         function.invoke()
+# 
+#     def test3(self):
+#         function = prepare_code("""
+#         var adder = function() {
+#             return function() {
+#                 return outer.argument.first() + outer.argument.second();
+#             };
+#         };
+#         
+#         var resulter = adder({ first: function() { return 5; }, second: function() { return 10; } });
+#         
+#         return resulter();
+#         """)
+#         self.assertEquals(function.invoke(), 15)

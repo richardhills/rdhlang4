@@ -15,6 +15,7 @@ from parser.visitor import comma_op, literal_op, break_op, addition_op, \
     transform_op
 from type_system.core_types import IntegerType
 from imaplib import Literal
+import ast
 
 
 class TestJSONParsing(TestCase):
@@ -329,12 +330,14 @@ class TestExtraStatics(TestCase):
             "static": new_object_op({
                 "local": object_type({}),
                 "argument": type_op("Void"),
-                "breaks": new_object_op({ "return": type_op("Integer") }),
+                "breaks": new_object_op({ "return": type_op("Integer"), "exit": type_op("Integer") }),
                 "foo": literal_op(5)
             }),
             "local_initializer": new_object_op({}),
             "code": transform_op(symbolic_dereference_ops(["foo"]), input="value", output="return")
         }
+        print json.dumps(ast)
+        print json.dumps(CORRECT)
         self.assertEquals(ast, CORRECT)
 
 class TestNestedFunctions(TestCase):

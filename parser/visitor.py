@@ -478,7 +478,12 @@ class RDHLang4Visitor(langVisitor):
             "exit": type_op("Inferred")
         }
         statements = [self.visit(s) for s in ctx.statement()]
-        statements = statements + [ break_op("exit", literal_op(0)) ]
+
+        if len(statements) > 0:
+            statements[-1] = break_op("exit", statements[-1])
+        else:
+            statements = statements + [ break_op("exit", literal_op(0)) ]
+
         return decompose_function(
             type_op("Void"),
             new_object_op(break_types),
