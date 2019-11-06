@@ -2,14 +2,10 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-from distutils.log import FATAL
-import json
-
 from exception_types import FatalException, PreparationException, \
     IncompatableAssignmentError, CreateReferenceError, \
     InvalidApplicationException, DataIntegrityError
-from parser.visitor import type_op, nop, literal_op, context_op, \
-    symbolic_dereference_ops
+from parser.visitor import nop, context_op, literal_op
 from type_system.core_types import UnitType, ObjectType, Type, VoidType, \
     merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
     InferredType

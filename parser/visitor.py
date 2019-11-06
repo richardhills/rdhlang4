@@ -2,14 +2,8 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-from __builtin__ import True
-from cookielib import offset_from_tz_string
-from symbol import argument
-
-from antlr4.tree.Tree import TerminalNodeImpl
-
 from parser.langVisitor import langVisitor
-from utils import spread_dict, MISSING, InternalMarker, NO_VALUE
+from utils import spread_dict, MISSING, InternalMarker
 
 
 class ParseError(Exception):

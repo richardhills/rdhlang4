@@ -2,15 +2,9 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-from __builtin__ import False
+from exception_types import DataIntegrityError
+from utils import MISSING
 
-from bunch import Bunch
-
-from exception_types import DataIntegrityError, IncompatableAssignmentError, \
-    CreateReferenceError, FatalException
-from utils import InternalMarker, MISSING, NO_VALUE
-from prompt_toolkit.key_binding.bindings.named_commands import self_insert
-from pickle import FALSE
 
 def are_bindable(first, second, first_is_rev_const, second_is_rev_const):
     """
@@ -29,6 +23,9 @@ def are_bindable(first, second, first_is_rev_const, second_is_rev_const):
     if not isinstance(second, Type):
         raise DataIntegrityError()
 
+    if first is second:
+        return True
+
     if not first.is_const and not second_is_rev_const:
         if not second.is_copyable_from(first):
             return False
@@ -38,6 +35,9 @@ def are_bindable(first, second, first_is_rev_const, second_is_rev_const):
     return True
 
 def are_common_properties_compatible(first, second):
+    if first is second:
+        return True
+
     for property_name in set(first.property_types.keys()) & set(second.property_types.keys()):
         if not are_bindable(first.property_types[property_name], second.property_types[property_name], first.is_rev_const, second.is_rev_const):
             return False
@@ -197,7 +197,10 @@ class UnitType(Type):
         return isinstance(other, UnitType) and other.value == self.value
 
     def __repr__(self):
-        return "UnitType<{}>".format(self.value)
+        if isinstance(self.value, basestring):
+            return "UnitType<\"{}\">".format(self.value)
+        else:
+            return "UnitType<{}>".format(self.value)
 
 def flatten_types(types):
     result = []
@@ -241,6 +244,9 @@ class OneOfType(Type):
         self.types = types
 
     def is_copyable_from(self, other):
+        if self is other:
+            return True
+
         types_that_need_checking = [ other ]
         if isinstance(other, OneOfType):
             types_that_need_checking = other.types
@@ -279,6 +285,8 @@ class ObjectType(Type):
                 raise DataIntegrityError()
 
     def is_copyable_from(self, other):
+        if self is other:
+            return True
         if not isinstance(other, ObjectType):
             return False
         if not are_common_properties_compatible(self, other):
@@ -310,9 +318,23 @@ class ObjectType(Type):
         }
 
     def __repr__(self, *args, **kwargs):
-        return "Object<\n{}\n>".format(",\n".join([
-            "  {}: {}".format(property_name, property_type) for property_name, property_type in self.property_types.items()
-        ]))
+        result = "Object<"
+
+        property_entries = self.property_types.items()
+
+        for property_name, property_type in property_entries:
+            property_type_repr_lines = repr(property_type).split("\n")
+            result = result + "\n  " + property_name + ": "
+            if len(property_type_repr_lines) > 0:
+                result = result + property_type_repr_lines[0].strip()
+            if len(property_type_repr_lines) > 1:
+                for line in property_type_repr_lines[1:]:
+                    result = result + "\n  " + line
+
+        if len(property_entries) > 0:
+            result = result + "\n>"
+
+        return result
 
 class TupleType(Type):
     def __init__(self, property_types, *args, **kwargs):
@@ -334,6 +356,9 @@ class FunctionType(Type):
         self.break_types = break_types
 
     def is_copyable_from(self, other):
+        if self is other:
+            return True
+
         if not isinstance(other, FunctionType):
             return False
 

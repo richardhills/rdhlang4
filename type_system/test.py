@@ -5,9 +5,9 @@ from __future__ import unicode_literals
 from unittest.case import TestCase
 import unittest.main
 
-from exception_types import CreateReferenceError
-from type_system.core_types import IncompatableAssignmentError, merge_types, \
-    OneOfType, ObjectType, IntegerType, BooleanType, AnyType, UnitType,\
+from exception_types import CreateReferenceError, IncompatableAssignmentError
+from type_system.core_types import merge_types, \
+    OneOfType, ObjectType, IntegerType, BooleanType, AnyType, UnitType, \
     are_bindable
 from type_system.values import Object
 

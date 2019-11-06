@@ -4,14 +4,13 @@ from __future__ import unicode_literals
 
 from antlr4.CommonTokenStream import CommonTokenStream
 from antlr4.InputStream import InputStream
-from antlr4.error.ErrorListener import ErrorListener, ConsoleErrorListener
+from antlr4.error.ErrorListener import ConsoleErrorListener
 
 from executor.executor import PreparedFunction
 from parser.langLexer import langLexer
 from parser.langParser import langParser
-from parser.visitor import RDHLang4Visitor, ParseError, function_literal, \
-    new_object_op, decompose_function
-from parser.visitor import type_op
+from parser.visitor import RDHLang4Visitor, ParseError
+
 
 class AlwaysFailErrorListener(ConsoleErrorListener):
 

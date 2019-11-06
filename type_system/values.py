@@ -1,11 +1,14 @@
+# -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import unicode_literals
+
 import weakref
 
 from bunch import Bunch
 
 from exception_types import DataIntegrityError, IncompatableAssignmentError, \
     CreateReferenceError
-from type_system.core_types import UnitType, ObjectType, FunctionType, VoidType, \
-    BooleanType, IntegerType, StringType, AnyType, TupleType, are_bindable, \
+from type_system.core_types import UnitType, ObjectType, VoidType, AnyType, TupleType, are_bindable, \
     are_common_properties_compatible
 from utils import NO_VALUE, MISSING
 
@@ -110,11 +113,12 @@ class Object(Bunch):
         if use_weak_ref:
             new_type_reference = weakref.ref(new_type_reference)
         self.type_references.append(new_type_reference)
-
+#
     def create_reference(self, new_type_reference, use_weak_ref):
         if self.is_new_type_reference_legal(new_type_reference):
             if isinstance(new_type_reference, ObjectType):
                 self.create_reference_on_all_child_references(new_type_reference)
             self.store_reference(new_type_reference, use_weak_ref)
         else:
+            self.is_new_type_reference_legal(new_type_reference)
             raise CreateReferenceError()
