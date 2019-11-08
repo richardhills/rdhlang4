@@ -5,7 +5,7 @@ from __future__ import unicode_literals
 from exception_types import FatalException, PreparationException, \
     IncompatableAssignmentError, CreateReferenceError, \
     InvalidApplicationException, DataIntegrityError
-from parser.visitor import nop, context_op, literal_op
+from parser.visitor import nop, context_op, literal_op, type_op
 from type_system.core_types import UnitType, ObjectType, Type, VoidType, \
     merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
     InferredType
@@ -15,9 +15,10 @@ from utils import InternalMarker, MISSING, NO_VALUE
 
 class BreakException(Exception):
 
-    def __init__(self, mode, value):
+    def __init__(self, mode, value, opcode=None):
         self.mode = mode
         self.value = value
+        self.opcode = opcode
         if isinstance(value, BreakException):
             raise DataIntegrityError()
 
@@ -27,13 +28,13 @@ class TypeErrorFactory(object):
     def __init__(self, message=None):
         self.message = message
 
-    def __call__(self):
+    def __call__(self, opcode=None):
         error = Object({
             "type": "TypeError",
         })
         if self.message:
             error.message = self.message
-        return BreakException("exception", error)
+        return BreakException("exception", error, opcode)
 
     def get_type(self):
         properties = {
@@ -196,17 +197,21 @@ class JumpOpcode(Opcode):
     def jump(self, context):
         argument = evaluate(self.argument, context)
         function = evaluate(self.function, context)
+        jump_to_function(function, argument)
 
-        if not isinstance(function, PreparedFunction):
-            raise self.MISSING_FUNCTION()
+def jump_to_function(function, argument):
+    if not isinstance(function, PreparedFunction):
+        raise JumpOpcode.MISSING_FUNCTION()
 
+    try:
         if argument is NO_VALUE:
             function.jump()
         else:
             function.jump(argument)
+    except InvalidArgumentException:
+        raise JumpOpcode.INVALID_ARGUMENT()
 
-        raise FatalException()
-
+    raise FatalException()
 
 class TransformBreak(Opcode):
 
@@ -256,11 +261,11 @@ class AssignmentOpcode(Opcode):
         dereference_type, dereference_break_types = get_expression_break_types(self.dereference, context)
         rvalue_type, rvalue_break_types = get_expression_break_types(self.rvalue, context)
         break_types = [
-            dereference_break_types, rvalue_break_types
+            dereference_break_types, rvalue_break_types, { "value": VoidType() }
         ]
         if not dereference_type.is_copyable_from(rvalue_type):
             break_types.append({
-                "exception": self.INVALID_ASSIGNMENT.get_type()
+                "exception": self.INVALID_ASSIGNMENT.get_type(),
             })
         return merge_break_types(break_types)
 
@@ -270,8 +275,9 @@ class AssignmentOpcode(Opcode):
         try:
             setattr(of, reference, new_value)
         except IncompatableAssignmentError:
-            raise self.INVALID_ASSIGNMENT()
+            raise self.INVALID_ASSIGNMENT(self)
 
+        raise BreakException("value", NO_VALUE)
 
 def clone_literal_value(value):
     if isinstance(value, (int, bool, basestring)):
@@ -719,9 +725,10 @@ class UnboundDereferenceBinder(object):
             return code
         return expression
 
+class InvalidArgumentException(Exception):
+    pass
 
 class PreparedFunction(object):
-
     def __init__(self, data, outer_context=NO_VALUE):
         self.data = data
 
@@ -832,7 +839,7 @@ class PreparedFunction(object):
             try:
                 evaluation_context.create_reference(context_type, False)
             except CreateReferenceError:
-                raise AssignmentOpcode.INVALID_ASSIGNMENT()
+                raise InvalidArgumentException()
 
             if self.code:
                 evaluate(self.code, evaluation_context)
@@ -848,7 +855,7 @@ class PreparedFunction(object):
 
     def invoke(self, argument=NO_VALUE):
         try:
-            self.jump(argument)
+            jump_to_function(self, argument)
         except BreakException as e:
             if e.mode == "return" or e.mode == "exit":
                 return e.value

@@ -145,7 +145,7 @@ def broaden_inferred_type(type):
 
 class InferredType(Type):
     def is_copyable_from(self, other):
-        return True
+        raise DataIntegrityError()
 
     def replace_inferred_types(self, other):
         return broaden_inferred_type(other)
