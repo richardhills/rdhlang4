@@ -104,12 +104,9 @@ class CommaOpcode(Opcode):
 
     def __init__(self, data, visitor):
         super(CommaOpcode, self).__init__(data)
-        try:
-            self.expressions = [
-                enrich_opcode(e, visitor) for e in self.data["expressions"]
-            ]
-        except TypeError:
-            pass
+        self.expressions = [
+            enrich_opcode(e, visitor) for e in self.data["expressions"]
+        ]
 
     def get_break_types(self, context):
         expressions_break_types = []
@@ -729,6 +726,8 @@ class InvalidArgumentException(Exception):
     pass
 
 class PreparedFunction(object):
+    INVALID_LOCAL = TypeErrorFactory("PreparedFunction: invalid_local")
+
     def __init__(self, data, outer_context=NO_VALUE):
         self.data = data
 
@@ -771,7 +770,7 @@ class PreparedFunction(object):
 
         local_initializer_assignment_break_types = {}
         if not self.local_type.is_copyable_from(local_initializer_type):
-            local_initializer_assignment_break_types["exception"] = AssignmentOpcode.INVALID_ASSIGNMENT.get_type()
+            local_initializer_assignment_break_types["exception"] = self.INVALID_LOCAL.get_type()
 
         self.with_argument_and_local_type_context = Object({
             "static": self.static,
@@ -828,18 +827,29 @@ class PreparedFunction(object):
             evaluation_context.update(self.static_evaluation_context)
             evaluation_context.update(self.with_argument_and_local_type_context)
             evaluation_context.argument = argument
-            evaluation_context.local = evaluate(self.local_initializer, evaluation_context)
     
-            context_type = ObjectType({
-                "local": self.local_type,
-                "argument": self.argument_type,
-                "outer": self.outer_context_type
-            }, False)
-
             try:
-                evaluation_context.create_reference(context_type, False)
+                evaluation_context.create_reference(
+                    ObjectType({ "argument": self.argument_type }, False), False
+                )
             except CreateReferenceError:
                 raise InvalidArgumentException()
+    
+            try:
+                evaluation_context.create_reference(
+                    ObjectType({ "outer": self.outer_context_type }, False), False
+                )
+            except CreateReferenceError:
+                raise FatalException()
+
+            evaluation_context.local = evaluate(self.local_initializer, evaluation_context)
+
+            try:
+                evaluation_context.create_reference(
+                    ObjectType({ "local": self.local_type }, False), False
+                )
+            except CreateReferenceError:
+                raise self.INVALID_LOCAL()
 
             if self.code:
                 evaluate(self.code, evaluation_context)
