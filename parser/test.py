@@ -10,6 +10,7 @@ from parser.rdhparser import parse
 from parser.visitor import new_object_op, type_op, object_type, assignment_op, \
     symbolic_dereference_ops, literal_op, break_op, addition_op, jump_op, \
     prepare_op, merge_op, nop, comma_op, transform_op, function_type, catch_op
+from utils import MISSING
 
 
 class TestJSONParsing(TestCase):
@@ -213,11 +214,12 @@ class TestLocalVariables(TestCase):
             "local_initializer": new_object_op({
                 "foo": literal_op(42)
             }),
-            "code": jump_op(prepare_op(literal_op({
+            "code": catch_op("sub_return", jump_op(prepare_op(literal_op({
                 "static": new_object_op({
                     "argument": type_op("Void"),
                     "breaks": new_object_op({
-                        "return": type_op("Void")
+                        "return": type_op("Void"),
+                        "sub_return": type_op("Void")
                     }),
                     "local": object_type({
                         "foo": type_op("Integer"),
@@ -229,8 +231,9 @@ class TestLocalVariables(TestCase):
                     new_object_op({
                         "bar": literal_op("hello")
                     })
-                )
-            })), nop())
+                ),
+                "code": break_op("sub_return", MISSING)
+            })), nop()))
         }
 
         self.assertEquals(ast, CORRECT)
@@ -262,11 +265,12 @@ class TestLocalVariables(TestCase):
                     symbolic_dereference_ops(["foo"]),
                     addition_op(symbolic_dereference_ops(["foo"]), literal_op(3))
                 ),
-                jump_op(prepare_op(literal_op({
+                catch_op("sub_return", jump_op(prepare_op(literal_op({
                     "static": new_object_op({
                         "argument": type_op("Void"),
                         "breaks": new_object_op({
-                            "return": type_op("Void")
+                            "return": type_op("Void"),
+                            "sub_return": type_op("Void")
                         }),
                         "local": object_type({
                             "foo": type_op("Integer"),
@@ -278,8 +282,9 @@ class TestLocalVariables(TestCase):
                         new_object_op({
                             "bar": literal_op("hello")
                         })
-                    )
-                })), nop())
+                    ),
+                    "code": break_op("sub_return", MISSING)
+                })), nop()))
             ])
         }
 

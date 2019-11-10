@@ -11,6 +11,7 @@ from type_system.core_types import UnitType, ObjectType, Type, VoidType, \
     InferredType
 from type_system.values import Object, create_crystal_type
 from utils import InternalMarker, MISSING, NO_VALUE
+from __builtin__ import True
 
 
 class BreakException(Exception):
@@ -110,13 +111,18 @@ class CommaOpcode(Opcode):
 
     def get_break_types(self, context):
         expressions_break_types = []
-        value_type = VoidType()
+        value_type = MISSING
 
         for expression in self.expressions:
-            value_type, expression_break_types = get_expression_break_types(expression, context, VoidType())
+            value_type, expression_break_types = get_expression_break_types(expression, context, MISSING)
             expressions_break_types.append(expression_break_types)
+            if value_type is MISSING:
+                break
 
-        return merge_break_types(expressions_break_types + [{ "value": value_type }])
+        if value_type is not MISSING:
+            expressions_break_types = expressions_break_types + [{ "value": value_type }]
+
+        return merge_break_types(expressions_break_types)
 
     def jump(self, context):
         result = MISSING
@@ -165,6 +171,7 @@ class PrepareOpcode(Opcode):
 class JumpOpcode(Opcode):
     MISSING_FUNCTION = TypeErrorFactory("JumpOpcode: missing function")
     INVALID_ARGUMENT = TypeErrorFactory("JumpOpcode: invalid_argument")
+    UNKNOWN_BREAK_MODE = TypeErrorFactory("JumpOpcode: unknown_break_mode")
 
     def __init__(self, data, visitor):
         self.function = enrich_opcode(data["function"], visitor)
@@ -187,14 +194,29 @@ class JumpOpcode(Opcode):
                 "exception": self.MISSING_FUNCTION.get_type()
             }, {
                 "exception": self.INVALID_ARGUMENT.get_type()
+            }, {
+                "return": AnyType(),
+                "exit": IntegerType()
             }])
 
         return merge_break_types(break_types)
 
     def jump(self, context):
+        function_type, _ = get_expression_break_types(self.function, context, MISSING)
+
         argument = evaluate(self.argument, context)
         function = evaluate(self.function, context)
-        jump_to_function(function, argument)
+
+        try:
+            jump_to_function(function, argument)
+        except BreakException as e:
+            if isinstance(function_type, FunctionType):
+                raise
+            if e.mode == "return":
+                raise
+            if e.mode == "exit" and isinstance(e.value, int):
+                raise
+            raise self.UNKNOWN_BREAK_MODE(self)
 
 def jump_to_function(function, argument):
     if not isinstance(function, PreparedFunction):
@@ -727,6 +749,7 @@ class InvalidArgumentException(Exception):
 
 class PreparedFunction(object):
     INVALID_LOCAL = TypeErrorFactory("PreparedFunction: invalid_local")
+    DID_NOT_TERMINATE = TypeErrorFactory("PreparedFunction: did_not_terminate")
 
     def __init__(self, data, outer_context=NO_VALUE):
         self.data = data
@@ -764,7 +787,7 @@ class PreparedFunction(object):
         local_initializer_unbound_dereference_binder = UnboundDereferenceBinder(self.with_argument_type_context)
         self.local_initializer = enrich_opcode(local_initializer, local_initializer_unbound_dereference_binder)
 
-        local_initializer_type, initializer_break_types = get_expression_break_types(self.local_initializer, self.with_argument_type_context)
+        local_initializer_type, initializer_break_types = get_expression_break_types(self.local_initializer, self.with_argument_type_context, MISSING)
 
         self.local_type = enrich_type(self.static.local).replace_inferred_types(local_initializer_type)
 
@@ -789,6 +812,19 @@ class PreparedFunction(object):
             self.code = None
             code_break_types = {}
 
+        function_might_not_terminate = False
+        if local_initializer_type == MISSING and initializer_break_types == {}:
+            function_might_not_terminate = True
+        if local_initializer_type is not MISSING:
+            if code_break_types == {}:
+                function_might_not_terminate = True
+            if "value" in code_break_types:
+                function_might_not_terminate = True
+
+        did_not_terminate_break_types = {}
+        if function_might_not_terminate:
+            did_not_terminate_break_types["exception"] = self.DID_NOT_TERMINATE.get_type()
+
         break_types_data = self.static.get("breaks", {
             "return": { "type": "Void" }
         });
@@ -800,7 +836,8 @@ class PreparedFunction(object):
         actual_break_types = merge_break_types([
             code_break_types,
             initializer_break_types,
-            local_initializer_assignment_break_types
+            local_initializer_assignment_break_types,
+            did_not_terminate_break_types,
         ])
 
         for break_mode, actual_break_type in actual_break_types.items():
@@ -853,6 +890,8 @@ class PreparedFunction(object):
 
             if self.code:
                 evaluate(self.code, evaluation_context)
+
+            raise self.DID_NOT_TERMINATE()
         except BreakException as e:
             declared_break_type = self.break_types.get(e.mode, MISSING)
             if declared_break_type is MISSING:
@@ -861,7 +900,7 @@ class PreparedFunction(object):
                 raise FatalException()
             raise
 
-        raise FatalException("Function did not exit")
+        raise FatalException("Function did not terminate")
 
     def invoke(self, argument=NO_VALUE):
         try:

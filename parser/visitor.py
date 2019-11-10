@@ -219,7 +219,7 @@ def symbolic_dereference_ops(parts, ctx=None):
 
 def decompose_function(
     argument_type_expression,
-    breaks_type_expression,
+    breaks_types,
     extra_statics,
     local_variable_types,
     local_initializer,
@@ -291,21 +291,26 @@ def decompose_function(
         if need_function_for_us:
             remainder_function = decompose_function(
                 type_op("Void", ctx),
-                breaks_type_expression,
+                spread_dict(breaks_types, { "sub_return": type_op("Void") }),
                 remainder_function_extra_statics,
                 remainder_function_local_variable_types,
                 remainder_function_local_variable_initializer,
-                code_for_remainder_function,
+                code_for_remainder_function + [ break_op("sub_return", MISSING, ctx) ],
                 ctx
             )
 
             code_for_us.append(
-                jump_op(prepare_op(literal_op(remainder_function, ctx), ctx), nop(), ctx)
+                catch_op(
+                    "sub_return",
+                    jump_op(
+                        prepare_op(literal_op(remainder_function, ctx), ctx), nop(), ctx
+                    ),
+                )
             )
         else:
             remaining_code_function = decompose_function(
                 argument_type_expression,
-                breaks_type_expression,
+                breaks_types,
                 remainder_function_extra_statics,
                 remainder_function_local_variable_types,
                 remainder_function_local_variable_initializer,
@@ -316,7 +321,7 @@ def decompose_function(
     if need_function_for_us:
         return function_literal(
             argument_type_expression,
-            breaks_type_expression,
+            breaks_types,
             extra_statics,
             object_type(local_variable_types, ctx),
             local_initializer,
@@ -327,10 +332,18 @@ def decompose_function(
         return remaining_code_function
 
 
-def function_literal(argument_type_expression, breaks_type_expression, extra_statics, local_type_expression, local_initializer, code_expressions, ctx=None):
+def function_literal(
+    argument_type_expression,
+    breaks_types,
+    extra_statics,
+    local_type_expression,
+    local_initializer,
+    code_expressions,
+    ctx=None
+):
     function_literal = {
         "static": new_object_op(spread_dict(extra_statics, {
-            "breaks": breaks_type_expression,
+            "breaks": new_object_op(breaks_types),
             "local": local_type_expression,
             "argument": argument_type_expression
         }), ctx)
@@ -480,7 +493,7 @@ class RDHLang4Visitor(langVisitor):
 
         return decompose_function(
             type_op("Void"),
-            new_object_op(break_types),
+            break_types,
             {},
             {},
             new_object_op({}),
@@ -598,7 +611,7 @@ class RDHLang4Visitor(langVisitor):
 
         return decompose_function(
             argument_type,
-            new_object_op(breaks),
+            breaks,
             {}, {},
             new_object_op({}, ctx if self.debug else None),
             [self.visit(s) for s in ctx.statement()],
