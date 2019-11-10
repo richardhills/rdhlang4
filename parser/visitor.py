@@ -291,21 +291,18 @@ def decompose_function(
         if need_function_for_us:
             remainder_function = decompose_function(
                 type_op("Void", ctx),
-                spread_dict(breaks_types, { "sub_return": type_op("Void") }),
+                breaks_types,
                 remainder_function_extra_statics,
                 remainder_function_local_variable_types,
                 remainder_function_local_variable_initializer,
-                code_for_remainder_function + [ break_op("sub_return", MISSING, ctx) ],
+                code_for_remainder_function,
                 ctx
             )
 
             code_for_us.append(
-                catch_op(
-                    "sub_return",
-                    jump_op(
-                        prepare_op(literal_op(remainder_function, ctx), ctx), nop(), ctx
-                    ),
-                )
+                jump_op(
+                    prepare_op(literal_op(remainder_function, ctx), ctx), nop(), ctx
+                ),
             )
         else:
             remaining_code_function = decompose_function(

@@ -164,8 +164,11 @@ class PrepareOpcode(Opcode):
         return merge_break_types(break_types)
 
     def jump(self, context):
-        function = PreparedFunction(self.function_data, context)
-        raise BreakException("value", function)
+        try:
+            function = PreparedFunction(self.function_data, context)
+            raise BreakException("value", function)
+        except PreparationException:
+            raise self.PREPARATION_ERROR()
 
 
 class JumpOpcode(Opcode):
@@ -807,10 +810,11 @@ class PreparedFunction(object):
 
         if "code" in self.data:
             self.code = enrich_opcode(self.data["code"], UnboundDereferenceBinder(self.with_argument_and_local_type_context))
-            _, code_break_types = get_expression_break_types(self.code, self.with_argument_and_local_type_context, None)
+            code_type, code_break_types = get_expression_break_types(self.code, self.with_argument_and_local_type_context, MISSING)
         else:
             self.code = None
             code_break_types = {}
+            code_type = MISSING
 
         function_might_not_terminate = False
         if local_initializer_type == MISSING and initializer_break_types == {}:
@@ -818,8 +822,9 @@ class PreparedFunction(object):
         if local_initializer_type is not MISSING:
             if code_break_types == {}:
                 function_might_not_terminate = True
-            if "value" in code_break_types:
+            if code_type is not MISSING:
                 function_might_not_terminate = True
+                get_expression_break_types(self.code, self.with_argument_and_local_type_context, MISSING)
 
         did_not_terminate_break_types = {}
         if function_might_not_terminate:

@@ -214,12 +214,11 @@ class TestLocalVariables(TestCase):
             "local_initializer": new_object_op({
                 "foo": literal_op(42)
             }),
-            "code": catch_op("sub_return", jump_op(prepare_op(literal_op({
+            "code": jump_op(prepare_op(literal_op({
                 "static": new_object_op({
                     "argument": type_op("Void"),
                     "breaks": new_object_op({
-                        "return": type_op("Void"),
-                        "sub_return": type_op("Void")
+                        "return": type_op("Void")
                     }),
                     "local": object_type({
                         "foo": type_op("Integer"),
@@ -231,9 +230,8 @@ class TestLocalVariables(TestCase):
                     new_object_op({
                         "bar": literal_op("hello")
                     })
-                ),
-                "code": break_op("sub_return", MISSING)
-            })), nop()))
+                )
+            })), nop())
         }
 
         self.assertEquals(ast, CORRECT)
@@ -265,12 +263,11 @@ class TestLocalVariables(TestCase):
                     symbolic_dereference_ops(["foo"]),
                     addition_op(symbolic_dereference_ops(["foo"]), literal_op(3))
                 ),
-                catch_op("sub_return", jump_op(prepare_op(literal_op({
+                jump_op(prepare_op(literal_op({
                     "static": new_object_op({
                         "argument": type_op("Void"),
                         "breaks": new_object_op({
-                            "return": type_op("Void"),
-                            "sub_return": type_op("Void")
+                            "return": type_op("Void")
                         }),
                         "local": object_type({
                             "foo": type_op("Integer"),
@@ -282,9 +279,8 @@ class TestLocalVariables(TestCase):
                         new_object_op({
                             "bar": literal_op("hello")
                         })
-                    ),
-                    "code": break_op("sub_return", MISSING)
-                })), nop()))
+                    )
+                })), nop())
             ])
         }
 

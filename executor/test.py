@@ -405,3 +405,18 @@ class TestMiscelaneous(TestCase):
 
         with self.assertRaises(BreakException):
             function.invoke()
+
+    def test6(self):
+        function = prepare_code("""foo = function(Void => Integer) { return "hello"; }; foo();""")
+
+        expected = merge_types([
+            JumpOpcode.INVALID_ARGUMENT.get_type(),
+            JumpOpcode.MISSING_FUNCTION.get_type(),
+            JumpOpcode.UNKNOWN_BREAK_MODE.get_type(),
+            DynamicDereferenceOpcode.INVALID_DEREFERENCE.get_type()
+        ])
+
+        self.assertTrue(expected.is_copyable_from(function.break_types["exception"]))
+
+        with self.assertRaises(BreakException):
+            function.invoke()
