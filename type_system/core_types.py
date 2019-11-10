@@ -383,6 +383,7 @@ class ObjectType(Type):
 
 class TupleType(Type):
     def __init__(self, property_types, *args, **kwargs):
+        raise NotImplementedError()
         super(TupleType, self).__init__(*args, **kwargs)
         # [ IntegerType, StringType ... ]
         self.property_types = list(property_types)

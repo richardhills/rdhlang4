@@ -113,7 +113,7 @@ class Object(Bunch):
         if use_weak_ref:
             new_type_reference = weakref.ref(new_type_reference)
         self.type_references.append(new_type_reference)
-#
+
     def create_reference(self, new_type_reference, use_weak_ref):
         if self.is_new_type_reference_legal(new_type_reference):
             if isinstance(new_type_reference, ObjectType):
@@ -122,3 +122,8 @@ class Object(Bunch):
         else:
             self.is_new_type_reference_legal(new_type_reference)
             raise CreateReferenceError()
+
+class Tuple(list):
+    def __init__(self, values):
+        raise NotImplementedError()
+        super(Tuple, self).__init__(values)

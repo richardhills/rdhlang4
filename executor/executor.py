@@ -2,16 +2,17 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+from __builtin__ import True
+
 from exception_types import FatalException, PreparationException, \
     IncompatableAssignmentError, CreateReferenceError, \
     InvalidApplicationException, DataIntegrityError
 from parser.visitor import nop, context_op, literal_op, type_op
 from type_system.core_types import UnitType, ObjectType, Type, VoidType, \
     merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
-    InferredType
-from type_system.values import Object, create_crystal_type
+    InferredType, OneOfType, TupleType
+from type_system.values import Object, create_crystal_type, Tuple
 from utils import InternalMarker, MISSING, NO_VALUE
-from __builtin__ import True
 
 
 class BreakException(Exception):
@@ -363,6 +364,31 @@ class NewObjectOpcode(Opcode):
             })
         )
 
+class NewTupleOpcode(Opcode):
+    def __init__(self, data, visitor):
+        super(NewTupleOpcode, self).__init__(data)
+        self.values = [ enrich_opcode(v, visitor) for v in self.data["values"] ]
+
+    def get_break_types(self, context):
+        value_types = []
+        other_breaks_types = []
+
+        for sub_value in self.values:
+            sub_value_type, sub_value_break_types = get_expression_break_types(sub_value, context)
+            other_breaks_types.append(sub_value_break_types)
+            value_types.append(sub_value_type)
+
+        return merge_break_types(
+            other_breaks_types + [{
+                "value": TupleType(value_types)
+            }]
+        )
+
+    def jump(self, context):
+        raise BreakException(
+            "value",
+            Tuple([ evaluate(value, context) for value in self.values])
+        )
 
 class MergeOpcode(Opcode):
     MISSING_OBJECTS = TypeErrorFactory("MergeOpcode: missing_objects")
@@ -627,6 +653,7 @@ OPCODES = {
     "assignment": AssignmentOpcode,
     "literal": LiteralValueOpcode,
     "new_object": NewObjectOpcode,
+    "new_tuple": NewTupleOpcode,
     "merge": MergeOpcode,
     "dereference": DereferenceOpcode,
     "dynamic_dereference": DynamicDereferenceOpcode,
@@ -668,6 +695,7 @@ def create_function_type_from_data(data):
 TYPES = {
     "Any": lambda data: AnyType(),
     "Object": lambda data: ObjectType({ name: enrich_type(type) for name, type in data["properties"].items() }, False),
+    "OneOf": lambda data: OneOfType([ enrich_type(type) for type in data["types"] ]),
     "Integer": lambda data: IntegerType(),
     "Boolean": lambda data: BooleanType(),
     "Void": lambda data: VoidType(),
@@ -683,7 +711,6 @@ def enrich_type(data):
         raise PreparationException("Unknown type {}".format(data["type"]))
 
     return type_constructor(data)
-
 
 class UnboundDereferenceBinder(object):
 
@@ -770,7 +797,10 @@ class PreparedFunction(object):
         static_unbound_dereference_binder = UnboundDereferenceBinder(self.static_evaluation_context)
 
         static_code = enrich_opcode(self.data["static"], static_unbound_dereference_binder)
-        self.static = evaluate(static_code, self.static_evaluation_context)
+        try:
+            self.static = evaluate(static_code, self.static_evaluation_context)
+        except BreakException:
+            raise PreparationException("BreakException while evaluating statics")
 
         self.argument_type = enrich_type(self.static.argument)
 

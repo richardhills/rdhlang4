@@ -24,6 +24,16 @@ def add_debugging(expression, ctx):
         expression["column"] = ctx.start.column
     return expression
 
+def new_tuple_op(values, ctx=None):
+    if not isinstance(values, (list, tuple)):
+        raise InvalidCodeError()
+    for value in values:
+        if not is_expression(value):
+            raise InvalidCodeError()
+    return add_debugging({
+        "opcode": "new_tuple",
+        "values": values
+    }, ctx)
 
 def new_object_op(properties, ctx=None):
     if not isinstance(properties, dict):
@@ -65,6 +75,12 @@ def type_op(name, ctx=None, **kwargs):
     properties.update(**kwargs)
     return new_object_op(properties, ctx)
 
+def one_of_type(types, ctx=None):
+    return type_op(
+        "OneOf", ctx, **{
+            "types": new_tuple_op(types)
+        }
+    )
 
 def object_type(properties, ctx=None):
     return type_op(
@@ -626,7 +642,7 @@ class RDHLang4Visitor(langVisitor):
             argument_type = self.visit(possible_argument_and_return_type[0])
             return_type = type_op("Inferred")
         else:
-            argument_type = type_op("Void")
+            argument_type = type_op("Void") #one_of_type([ type_op("Void"), type_op("Any") ])
             return_type = type_op("Inferred")
 
         return (argument_type, return_type)
