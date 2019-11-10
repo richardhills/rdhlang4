@@ -8,7 +8,7 @@ import unittest.main
 from exception_types import CreateReferenceError, IncompatableAssignmentError
 from type_system.core_types import merge_types, \
     OneOfType, ObjectType, IntegerType, BooleanType, AnyType, UnitType, \
-    are_bindable
+    are_bindable, StringType
 from type_system.values import Object
 
 
@@ -363,6 +363,24 @@ class TestCompileTimeOneOfTypeChecks(TestCase):
         self.assertEquals(
             merge_types([ UnitType(5), UnitType(10), UnitType(15), UnitType(20), IntegerType() ]),
             IntegerType()
+        )
+
+    def test_combine_identical_object_types(self):
+        self.assertEquals(
+            merge_types([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "foo": IntegerType() }, False) ]),
+            ObjectType({ "foo": IntegerType() }, False)
+        )
+
+    def test_combine_different_property_object_types(self):
+        self.assertEquals(
+            merge_types([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "bar": IntegerType() }, False) ]),
+            OneOfType([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "bar": IntegerType() }, False) ])
+        )
+
+    def test_combine_different_property_types_object_types(self):
+        self.assertEquals(
+            merge_types([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "foo": StringType() }, False) ]),
+            OneOfType([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "foo": StringType() }, False) ])
         )
 
 
