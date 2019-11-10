@@ -72,6 +72,12 @@ class StringType(Type):
             "type": "String"
         }
 
+    def __hash__(self):
+        return hash("String")
+
+    def __eq__(self, other):
+        return isinstance(other, StringType)
+
     def __repr__(self):
         return "StringType"
 
@@ -91,6 +97,9 @@ class IntegerType(Type):
         return {
             "type": "Integer"
         }
+
+    def __hash__(self):
+        return hash("Integer")
 
     def __eq__(self, other):
         return isinstance(other, IntegerType)
@@ -113,6 +122,12 @@ class BooleanType(Type):
             "type": "Boolean"
         }
 
+    def __hash__(self):
+        return hash("Boolean")
+
+    def __eq__(self, other):
+        return isinstance(other, BooleanType)
+
     def __repr__(self):
         return "BooleanType"
 
@@ -126,6 +141,9 @@ class AnyType(Type):
         return {
             "type": "Any"
         }
+
+    def __hash__(self):
+        return hash("Any")
 
     def __eq__(self, other):
         return isinstance(other, AnyType)
@@ -167,6 +185,12 @@ class VoidType(Type):
         return {
             "type": "Void"
         }
+
+    def __hash__(self):
+        return hash("Void")
+
+    def __eq__(self, other):
+        return isinstance(other, VoidType)
 
     def __repr__(self):
         return "VoidType"
@@ -264,6 +288,12 @@ class OneOfType(Type):
             "types": [t.to_dict() for t in self.types]
         }
 
+    def __hash__(self):
+        result = 0
+        for type in self.types:
+            result = result ^ hash(type)
+        return result
+
     def __eq__(self, other):
         if not isinstance(other, OneOfType):
             return False
@@ -336,6 +366,21 @@ class ObjectType(Type):
 
         return result
 
+    def __hash__(self):
+        result = 0
+        property_entries = self.property_types.items()
+
+        for property_name, property_type in property_entries:
+            result = result ^ hash(property_name)
+            result = result ^ hash(property_type)
+
+        return result
+
+    def __eq__(self, other):
+        if not isinstance(other, ObjectType):
+            return False
+        return are_bindable(self, other, self.is_rev_const, other.is_rev_const)
+
 class TupleType(Type):
     def __init__(self, property_types, *args, **kwargs):
         super(TupleType, self).__init__(*args, **kwargs)
@@ -346,7 +391,7 @@ class TupleType(Type):
                 raise DataIntegrityError()
 
     def get_crystal_value(self):
-        return tuple(p.get_crystal_value() for p in self.property_types)
+        return [p.get_crystal_value() for p in self.property_types]
 
 class FunctionType(Type):
 
@@ -382,6 +427,20 @@ class FunctionType(Type):
                 mode: type.to_dict() for (mode, type) in self.break_types.items()
             }
         }
+
+    def __hash__(self):
+        result = 0
+        result = result ^ hash(self.argument_type)
+        for mode, type in self.break_types.items():
+            result = result ^ hash(mode)
+            result = result ^ hash(type)
+        return result
+
+    def __eq__(self, other):
+        if not isinstance(other, FunctionType):
+            return False
+
+        return are_bindable(self, other, False, False)
 
     def __repr__(self):
         return "Function<{} => {}>".format(self.argument_type, self.break_types)
