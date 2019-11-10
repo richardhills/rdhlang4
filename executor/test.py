@@ -5,9 +5,9 @@ from __future__ import unicode_literals
 from unittest.case import TestCase
 
 from executor.executor import PreparedFunction, PreparationException, \
-    BreakException
+    BreakException, JumpOpcode, DynamicDereferenceOpcode
 from parser.rdhparser import parse, prepare_code
-from type_system.core_types import ObjectType, IntegerType
+from type_system.core_types import ObjectType, IntegerType, merge_types
 
 
 class TestExecutor(TestCase):
@@ -384,5 +384,24 @@ class TestMiscelaneous(TestCase):
             var func = function() { };
             return func(42);
         """)
+        with self.assertRaises(BreakException):
+            function.invoke()
+
+    def test4(self):
+        function = prepare_code("""foo = function(Void => Integer) {};""");
+        function.invoke()
+ 
+    def test5(self):
+        function = prepare_code("""foo = function(Void => Integer) {}; foo();""")
+
+        expected = merge_types([
+            JumpOpcode.INVALID_ARGUMENT.get_type(),
+            JumpOpcode.MISSING_FUNCTION.get_type(),
+            JumpOpcode.UNKNOWN_BREAK_MODE.get_type(),
+            DynamicDereferenceOpcode.INVALID_DEREFERENCE.get_type()
+        ])
+
+        self.assertTrue(expected.is_copyable_from(function.break_types["exception"]))
+
         with self.assertRaises(BreakException):
             function.invoke()
