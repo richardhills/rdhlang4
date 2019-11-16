@@ -4,9 +4,11 @@ from __future__ import unicode_literals
 
 from exception_types import DataIntegrityError
 from utils import MISSING
+from __builtin__ import False
+from pickle import FALSE
 
 
-def are_bindable(first, second, first_is_rev_const, second_is_rev_const):
+def are_bindable(first, second, first_is_rev_const, second_is_rev_const, ignore_void_types=False):
     """
     Returns True if a name of type self and another name of type other can be bound together.
 
@@ -26,20 +28,11 @@ def are_bindable(first, second, first_is_rev_const, second_is_rev_const):
     if first is second:
         return True
 
-    if not first.is_const and not second_is_rev_const:
+    if not first.is_const and not second_is_rev_const and not (isinstance(first, VoidType) and ignore_void_types):
         if not second.is_copyable_from(first):
             return False
-    if not second.is_const and not first_is_rev_const:
+    if not second.is_const and not first_is_rev_const and not (isinstance(second, VoidType) and ignore_void_types):
         if not first.is_copyable_from(second):
-            return False
-    return True
-
-def are_common_properties_compatible(first, second):
-    if first is second:
-        return True
-
-    for property_name in set(first.property_types.keys()) & set(second.property_types.keys()):
-        if not are_bindable(first.property_types[property_name], second.property_types[property_name], first.is_rev_const, second.is_rev_const):
             return False
     return True
 
@@ -135,7 +128,7 @@ class BooleanType(Type):
 class AnyType(Type):
 
     def is_copyable_from(self, other):
-        return True
+        return not isinstance(other, VoidType)
 
     def to_dict(self):
         return {
@@ -303,6 +296,16 @@ class OneOfType(Type):
         return "OneOfType<{}>".format(", ".join(repr(t) for t in self.types))
 
 
+def are_common_properties_compatible(first, second):
+    if first is second:
+        return True
+
+    for property_name in set(first.property_types.keys()) & set(second.property_types.keys()):
+        if not are_bindable(first.property_types[property_name], second.property_types[property_name], first.is_rev_const, second.is_rev_const):
+            return False
+    return True
+
+
 class ObjectType(Type):
 
     def __init__(self, property_types, is_rev_const, *args, **kwargs):
@@ -381,15 +384,54 @@ class ObjectType(Type):
             return False
         return are_bindable(self, other, self.is_rev_const, other.is_rev_const)
 
-class TupleType(Type):
-    def __init__(self, property_types, *args, **kwargs):
-        raise NotImplementedError()
-        super(TupleType, self).__init__(*args, **kwargs)
+
+
+def are_common_entries_compatible(first, second):
+    if first is second:
+        return True
+
+    for first_entry_type, second_entry_type in zip(first.entry_types, second.entry_types):
+        if not are_bindable(first_entry_type, second_entry_type, first.is_rev_const, second.is_rev_const):
+            return False
+
+    return True
+
+
+class ListType(Type):
+    def __init__(self, entry_types, wildcard_type, is_rev_const, *args, **kwargs):
+        super(ListType, self).__init__(*args, **kwargs)
         # [ IntegerType, StringType ... ]
-        self.property_types = list(property_types)
-        for property_type in self.property_types:
+        self.entry_types = list(entry_types)
+        self.wildcard_type = wildcard_type
+        self.is_rev_const = is_rev_const
+
+        for property_type in self.entry_types:
             if not isinstance(property_type, Type):
                 raise DataIntegrityError()
+        if not isinstance(self.wildcard_type, Type):
+            raise DataIntegrityError()
+
+    def is_copyable_from(self, other):
+        if not isinstance(other, ListType):
+            return False
+        if not are_common_entries_compatible(self, other):
+            return False
+        if len(self.entry_types) > len(other.entry_types):
+            if not self.is_rev_const:
+                return False
+            for our_type in self.entry_types[len(other.entry_types):]:
+                if not are_bindable(our_type, other.wildcard_type, self.is_rev_const, other.is_rev_const):
+                    return False
+        if len(self.entry_types) < len(other.entry_types):
+            if not other.is_rev_const:
+                return False
+            for other_type in other.entry_types[len(self.entry_types):]:
+                if not are_bindable(self.wildcard_type, other_type, self.is_rev_const, other.is_rev_const):
+                    return False
+        if not are_bindable(self.wildcard_type, other.wildcard_type, self.is_rev_const, other.is_rev_const, ignore_void_types=True):
+            are_bindable(self.wildcard_type, other.wildcard_type, self.is_rev_const, other.is_rev_const, ignore_void_types=True)
+            return False
+        return True
 
     def get_crystal_value(self):
         return [p.get_crystal_value() for p in self.property_types]

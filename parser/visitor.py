@@ -499,7 +499,7 @@ class RDHLang4Visitor(langVisitor):
         }
         statements = [self.visit(s) for s in ctx.statement()]
 
-        if len(statements) > 0 and is_expression(statements[0]):
+        if len(statements) > 0 and is_expression(statements[-1]):
             statements[-1] = break_op("return", statements[-1])
         else:
             statements = statements + [ break_op("exit", literal_op(0)) ]

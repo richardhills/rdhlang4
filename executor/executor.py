@@ -2,16 +2,14 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-from __builtin__ import True
-
 from exception_types import FatalException, PreparationException, \
     IncompatableAssignmentError, CreateReferenceError, \
     InvalidApplicationException, DataIntegrityError
 from parser.visitor import nop, context_op, literal_op, type_op
 from type_system.core_types import UnitType, ObjectType, Type, VoidType, \
     merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
-    InferredType, OneOfType, TupleType
-from type_system.values import Object, create_crystal_type, Tuple
+    InferredType, OneOfType, ListType
+from type_system.values import Object, create_crystal_type, List
 from utils import InternalMarker, MISSING, NO_VALUE
 
 
@@ -252,7 +250,9 @@ class TransformBreak(Opcode):
         if self.expression:
             break_types = self.expression.get_break_types(context)
             if self.input in break_types:
-                break_types[self.output] = break_types.pop(self.input)
+                break_types = merge_break_types([
+                    break_types, { self.output: break_types.pop(self.input) }
+                ])
         else:
             break_types = {
                 self.output: VoidType()
@@ -281,11 +281,13 @@ class AssignmentOpcode(Opcode):
         self.rvalue = enrich_opcode(data["rvalue"], visitor)
 
     def get_break_types(self, context):
-        dereference_type, dereference_break_types = get_expression_break_types(self.dereference, context)
-        rvalue_type, rvalue_break_types = get_expression_break_types(self.rvalue, context)
+        dereference_type, dereference_break_types = get_expression_break_types(self.dereference, context, MISSING)
+        rvalue_type, rvalue_break_types = get_expression_break_types(self.rvalue, context, MISSING)
         break_types = [
-            dereference_break_types, rvalue_break_types, { "value": VoidType() }
+            dereference_break_types, rvalue_break_types
         ]
+        if dereference_type is not MISSING and rvalue_type is not MISSING:
+            break_types.append({ "value": VoidType() })
         if not dereference_type.is_copyable_from(rvalue_type):
             break_types.append({
                 "exception": self.INVALID_ASSIGNMENT.get_type(),
@@ -364,9 +366,9 @@ class NewObjectOpcode(Opcode):
             })
         )
 
-class NewTupleOpcode(Opcode):
+class NewListOpcode(Opcode):
     def __init__(self, data, visitor):
-        super(NewTupleOpcode, self).__init__(data)
+        super(NewListOpcode, self).__init__(data)
         self.values = [ enrich_opcode(v, visitor) for v in self.data["values"] ]
 
     def get_break_types(self, context):
@@ -380,14 +382,14 @@ class NewTupleOpcode(Opcode):
 
         return merge_break_types(
             other_breaks_types + [{
-                "value": TupleType(value_types)
+                "value": ListType(value_types)
             }]
         )
 
     def jump(self, context):
         raise BreakException(
             "value",
-            Tuple([ evaluate(value, context) for value in self.values])
+            List([ evaluate(value, context) for value in self.values])
         )
 
 class MergeOpcode(Opcode):
@@ -653,7 +655,7 @@ OPCODES = {
     "assignment": AssignmentOpcode,
     "literal": LiteralValueOpcode,
     "new_object": NewObjectOpcode,
-    "new_tuple": NewTupleOpcode,
+    "new_list": NewListOpcode,
     "merge": MergeOpcode,
     "dereference": DereferenceOpcode,
     "dynamic_dereference": DynamicDereferenceOpcode,
@@ -899,14 +901,14 @@ class PreparedFunction(object):
             evaluation_context.update(self.static_evaluation_context)
             evaluation_context.update(self.with_argument_and_local_type_context)
             evaluation_context.argument = argument
-    
+
             try:
                 evaluation_context.create_reference(
                     ObjectType({ "argument": self.argument_type }, False), False
                 )
             except CreateReferenceError:
                 raise InvalidArgumentException()
-    
+
             try:
                 evaluation_context.create_reference(
                     ObjectType({ "outer": self.outer_context_type }, False), False

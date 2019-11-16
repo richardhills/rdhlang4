@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+import json
 from unittest.case import TestCase
 
 from executor.executor import PreparedFunction, PreparationException, \
@@ -420,3 +421,31 @@ class TestMiscelaneous(TestCase):
 
         with self.assertRaises(BreakException):
             function.invoke()
+
+    def test7(self):
+        function = prepare_code("""
+            var incremented = function(Integer) nothrow {
+                return argument + 1;
+            };
+            incremented(41);
+        """)
+        self.assertEqual(function.invoke(), 42)
+
+    def test8(self):
+        function = prepare_code("""
+            f = function(Any) {
+                return argument;
+            };
+
+            return f();
+        """)
+        with self.assertRaises(BreakException):
+            function.invoke()
+
+    def test9(self):
+        function = prepare_code("""
+            foo = "hello";
+            foo = return foo;
+        """)
+
+        self.assertEquals(function.invoke(), "hello")

@@ -8,8 +8,8 @@ import unittest.main
 from exception_types import CreateReferenceError, IncompatableAssignmentError
 from type_system.core_types import merge_types, \
     OneOfType, ObjectType, IntegerType, BooleanType, AnyType, UnitType, \
-    are_bindable, StringType
-from type_system.values import Object
+    are_bindable, StringType, ListType, VoidType
+from type_system.values import Object, List
 
 
 # Golden rules:
@@ -17,7 +17,7 @@ from type_system.values import Object
 # At runtime, be liberal. Block only things that we know will either break us or something else, using the greater amount of information to hand.
 #
 # Modifiers, like const, allow more types of assignment, because the range of things that might break is reduced
-class TestCompileTimeChecks(TestCase):
+class TestCompileTimeObjectChecks(TestCase):
     maxDiff = 65536
 
     def test_successful_simple_compile_time_object_assignment(self):
@@ -283,6 +283,74 @@ class TestCompileTimeChecks(TestCase):
         # foo.bar.bam - which is undefined
         self.assertFalse(foo.is_copyable_from(other_foo))
 
+class TestCompileTimeListChecks(TestCase):
+    maxDiff = 65536
+
+    def test_successful_simple_compile_time_list_assignment(self):
+        foo = ListType([], IntegerType(), False)
+        other_foo = ListType([], IntegerType(), False)
+
+        self.assertTrue(foo.is_copyable_from(other_foo))
+
+    def test_failed_simple_compile_time_list_assignment(self):
+        foo = ListType([], AnyType(), False)
+        other_foo = ListType([], IntegerType(), False)
+
+        # Blocked because it would allows foo[0] = "hello" - looking at you Java
+        self.assertFalse(foo.is_copyable_from(other_foo))
+
+    def test_successful_simple_rev_const_compile_time_list_assignment(self):
+        foo = ListType([], AnyType(), False)
+        other_foo = ListType([], IntegerType(), True)
+
+        self.assertTrue(foo.is_copyable_from(other_foo))
+
+    def test_successful_simple_compile_time_tuple_assignment(self):
+        foo = ListType([ IntegerType(), StringType() ], AnyType(), False)
+        other_foo = ListType([ IntegerType(), StringType() ], AnyType(), False)
+
+        self.assertTrue(foo.is_copyable_from(other_foo))
+
+    def test_failed_simple_compile_time_tuple_to_list_assignment(self):
+        foo = ListType([], AnyType(), False)
+        other_foo = ListType([ IntegerType(), StringType() ], VoidType(), False)
+
+        # Blocked because it would allow foo[0] = "hello";
+        self.assertFalse(foo.is_copyable_from(other_foo))
+
+    def test_successful_simple_compile_time_rev_const_tuple_to_list_assignment(self):
+        foo = ListType([], AnyType(), False)
+        other_foo = ListType([ IntegerType(), StringType() ], VoidType(), True)
+
+        self.assertTrue(foo.is_copyable_from(other_foo))
+
+    def test_failed_incompatible_type_compile_time_tuple_to_list_assignment(self):
+        foo = ListType([], IntegerType(), False)
+        other_foo = ListType([ IntegerType(), StringType() ], VoidType(), True)
+
+        self.assertFalse(foo.is_copyable_from(other_foo))
+
+    def test_successful_type_compile_time_same_type_tuple_to_list_assignment(self):
+        foo = ListType([], IntegerType(), False)
+        other_foo = ListType([ IntegerType(), IntegerType() ], VoidType(), True)
+
+        # Allowed because operations on foo don't break other_foo, and other_foo is rev_const
+        self.assertTrue(foo.is_copyable_from(other_foo))
+
+    def test_failed_incompatible_type_compile_time_same_type_tuple_to_list_assignment(self):
+        foo = ListType([], IntegerType(), False)
+        other_foo = ListType([ IntegerType(), IntegerType() ], VoidType(), False)
+
+        # Blocked because foo.push(123) might corrupot other_foo
+        self.assertFalse(foo.is_copyable_from(other_foo))
+
+    def test_failed_incompatible_type_list_to_tuple_assignment(self):
+        foo = ListType([IntegerType(), IntegerType(), IntegerType()], IntegerType(), False)
+        other_foo = ListType([], IntegerType(), False)
+
+        # Blocked because other_foo[0] might fail, but foo[0] can not
+        self.assertFalse(foo.is_copyable_from(other_foo))
+
 
 class TestCompileTimeUnitTypeChecks(TestCase):
     def test_successful_basic_assignment(self):
@@ -498,7 +566,7 @@ class TestRuntimeMutationChecks(TestCase):
         with self.assertRaises(IncompatableAssignmentError):
             foo.bar = replacement_bar
 
-class TestRuntimeCastingChecks(TestCase):
+class TestRuntimeObjectTypeCastingChecks(TestCase):
 
     def test_successful_single_create_reference(self):
         foo = Object({
@@ -680,6 +748,12 @@ class TestRuntimeCastingChecks(TestCase):
         foo.create_reference(ObjectType({
             "bar": AnyType(is_const=True)
         }, False), False)
+
+class TestRuntimeListTypeCastingChecks(TestCase):
+    def test_successful_single_create_reference(self):
+        foo = List([5, 3, 7])
+
+        foo.create_reference(ListType([], IntegerType(), False), False)
 
 
 if __name__ == '__main__':
