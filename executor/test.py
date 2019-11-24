@@ -480,7 +480,6 @@ class TestEuler(TestCase):
 #         self.assertEquals(function.invoke(), 233168)
 
     def testProblem2(self):
-        return
         function = prepare_code("""
             var a = 1, b = 2;
             var answer = 0;
