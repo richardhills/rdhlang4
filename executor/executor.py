@@ -4,23 +4,32 @@ from __future__ import unicode_literals
 
 from exception_types import FatalException, PreparationException, \
     IncompatableAssignmentError, CreateReferenceError, \
-    InvalidApplicationException, DataIntegrityError
+    InvalidApplicationException, DataIntegrityError, \
+    CrystalValueCanNotBeGenerated
 from parser.visitor import nop, context_op, literal_op, type_op
 from type_system.core_types import UnitType, ObjectType, Type, VoidType, \
     merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
     InferredType, OneOfType, ListType
 from type_system.values import Object, create_crystal_type, List
 from utils import InternalMarker, MISSING, NO_VALUE
+from _collections import defaultdict
 
 
 class BreakException(Exception):
 
-    def __init__(self, mode, value, opcode=None):
+    def __init__(self, mode, value, opcode=None, caused_by=None):
         self.mode = mode
         self.value = value
         self.opcode = opcode
+        self.caused_by = caused_by
         if isinstance(value, BreakException):
             raise DataIntegrityError()
+
+    def __str__(self):
+        result = "BreakException<{}: {}>".format(self.mode, self.value)
+        if self.caused_by:
+            result = "{}\n{}".format(result, self.caused_by)
+        return result
 
 
 class TypeErrorFactory(object):
@@ -28,13 +37,13 @@ class TypeErrorFactory(object):
     def __init__(self, message=None):
         self.message = message
 
-    def __call__(self, opcode=None):
+    def __call__(self, opcode=None, caused_by=None):
         error = Object({
             "type": "TypeError",
         })
         if self.message:
             error.message = self.message
-        return BreakException("exception", error, opcode)
+        return BreakException("exception", error, opcode=opcode, caused_by=caused_by)
 
     def get_type(self):
         properties = {
@@ -142,23 +151,37 @@ class PrepareOpcode(Opcode):
         self.function_data = None
 
     def get_break_types(self, context):
-        self.function_raw_data_type, self.other_break_types = get_expression_break_types(self.function, context)
-        self.function_data = self.function_raw_data_type.get_crystal_value()
+        self.function_raw_data_type, self.other_break_types = get_expression_break_types(self.function, context, MISSING)
+
+        if not self.function_raw_data_type is MISSING:
+            try:
+                self.function_data = self.function_raw_data_type.get_crystal_value()
+            except CrystalValueCanNotBeGenerated:
+                pass
 
         break_types = [
             self.other_break_types
         ]
 
+        function = None
         try:
-            function = PreparedFunction(self.function_data, context)
+            if self.function_data:
+                function = PreparedFunction(self.function_data, context)
+        except PreparationException:
+            pass
+
+        if function: 
             break_types.append({
                 "value": function.get_type()
             })
-        except PreparationException:
+        else:
             break_types.append({
-                "value": AnyType(),
                 "exception": self.PREPARATION_ERROR.get_type()
             })
+            if self.function_raw_data_type is not MISSING:
+                break_types.append({
+                    "value": AnyType()
+                })
 
         return merge_break_types(break_types)
 
@@ -166,8 +189,8 @@ class PrepareOpcode(Opcode):
         try:
             function = PreparedFunction(self.function_data, context)
             raise BreakException("value", function)
-        except PreparationException:
-            raise self.PREPARATION_ERROR()
+        except PreparationException as e:
+            raise self.PREPARATION_ERROR(caused_by=e)
 
 
 class JumpOpcode(Opcode):
@@ -185,7 +208,7 @@ class JumpOpcode(Opcode):
 
         break_types = [ argument_break_types, function_evaluation_break_types ]
 
-        if isinstance(function_type, FunctionType):
+        if isinstance(function_type, FunctionType) and argument_type is not MISSING:
             break_types.append(function_type.break_types)
             if not function_type.argument_type.is_copyable_from(argument_type):
                 break_types.append({
@@ -196,10 +219,13 @@ class JumpOpcode(Opcode):
                 "exception": self.MISSING_FUNCTION.get_type()
             }, {
                 "exception": self.INVALID_ARGUMENT.get_type()
-            }, {
-                "return": AnyType(),
-                "exit": IntegerType()
             }])
+
+            if function_type is not MISSING and argument_type is not MISSING:
+                break_types.append({
+                    "return": AnyType(),
+                    "exit": IntegerType()
+                })
 
         return merge_break_types(break_types)
 
@@ -220,6 +246,7 @@ class JumpOpcode(Opcode):
                 raise
             raise self.UNKNOWN_BREAK_MODE(self)
 
+
 def jump_to_function(function, argument):
     if not isinstance(function, PreparedFunction):
         raise JumpOpcode.MISSING_FUNCTION()
@@ -233,6 +260,59 @@ def jump_to_function(function, argument):
         raise JumpOpcode.INVALID_ARGUMENT()
 
     raise FatalException()
+
+
+class LoopOpcode(Opcode):
+
+    def __init__(self, data, visitor):
+        super(LoopOpcode, self).__init__(data)
+        self.code = enrich_opcode(self.data["code"], visitor)
+
+    def get_break_types(self, context):
+        _, code_break_types = get_expression_break_types(self.code, context, MISSING)
+        return code_break_types
+
+    def jump(self, context):
+        while True:
+            evaluate(self.code, context)
+
+
+class ConditionalOpcode(Opcode):
+    INVALID_CONDITION_VALUE = TypeErrorFactory("ConditionalOpcode: invalid_condition_value")
+
+    def __init__(self, data, visitor):
+        super(ConditionalOpcode, self).__init__(data)
+        self.condition = enrich_opcode(self.data["condition"], visitor)
+        self.true_code = enrich_opcode(self.data["true_code"], visitor)
+        self.false_code = enrich_opcode(self.data["false_code"], visitor)
+
+    def get_break_types(self, context):
+        condition_type, condition_break_types = get_expression_break_types(self.condition, context, MISSING)
+
+        break_types = [
+            condition_break_types,
+            self.true_code.get_break_types(context),
+            self.false_code.get_break_types(context)
+        ]
+
+        if not BooleanType().is_copyable_from(condition_type):
+            break_types.append({
+                "exception": self.INVALID_CONDITION_VALUE.get_type()
+            })
+
+        return merge_break_types(break_types)
+
+    def jump(self, context):
+        condition = evaluate(self.condition, context)
+        if not isinstance(condition, bool):
+            raise self.INVALID_CONDITION_VALUE()
+
+        if condition is True:
+            result = evaluate(self.true_code, context)
+        else:
+            result = evaluate(self.false_code, context)
+        raise BreakException("value", result)
+
 
 class TransformBreak(Opcode):
 
@@ -304,6 +384,7 @@ class AssignmentOpcode(Opcode):
 
         raise BreakException("value", NO_VALUE)
 
+
 def clone_literal_value(value):
     if isinstance(value, (int, bool, basestring)):
         return value
@@ -366,7 +447,9 @@ class NewObjectOpcode(Opcode):
             })
         )
 
+
 class NewListOpcode(Opcode):
+
     def __init__(self, data, visitor):
         super(NewListOpcode, self).__init__(data)
         self.values = [ enrich_opcode(v, visitor) for v in self.data["values"] ]
@@ -391,6 +474,7 @@ class NewListOpcode(Opcode):
             "value",
             List([ evaluate(value, context) for value in self.values])
         )
+
 
 class MergeOpcode(Opcode):
     MISSING_OBJECTS = TypeErrorFactory("MergeOpcode: missing_objects")
@@ -433,80 +517,46 @@ class MergeOpcode(Opcode):
         }))
 
 
-class AdditionOpcode(Opcode):
-    MISSING_INTEGERS = TypeErrorFactory("AdditionOpcode: missing_integers")
+def BinaryOpcode(func, result_type, name):
 
-    def __init__(self, data, visitor):
-        super(AdditionOpcode, self).__init__(data)
-        self.lvalue = enrich_opcode(self.data["lvalue"], visitor)
-        self.rvalue = enrich_opcode(self.data["rvalue"], visitor)
+    class NewOpcode(Opcode):
+        MISSING_INTEGERS = TypeErrorFactory("{}: missing_integers".format(name))
 
-    def get_break_types(self, context):
-        lvalue_type, lexpression_break_types = get_expression_break_types(self.lvalue, context, MISSING)
-        rvalue_type, rexpression_break_types = get_expression_break_types(self.rvalue, context, MISSING)
+        def __init__(self, data, visitor):
+            super(NewOpcode, self).__init__(data)
+            self.lvalue = enrich_opcode(self.data["lvalue"], visitor)
+            self.rvalue = enrich_opcode(self.data["rvalue"], visitor)
 
-        int_type = IntegerType()
-        self_break_types = []
+        def get_break_types(self, context):
+            lvalue_type, lexpression_break_types = get_expression_break_types(self.lvalue, context, MISSING)
+            rvalue_type, rexpression_break_types = get_expression_break_types(self.rvalue, context, MISSING)
 
-        if lvalue_type is MISSING or rvalue_type is MISSING or not int_type.is_copyable_from(lvalue_type) or not int_type.is_copyable_from(rvalue_type):
-            self_break_types.append({
-                "exception": self.MISSING_INTEGERS.get_type()
-            })
+            int_type = IntegerType()
+            self_break_types = []
 
-        return merge_break_types(self_break_types + [
-            lexpression_break_types,
-            rexpression_break_types, {
-                "value": IntegerType()
-            }
-        ])
+            if lvalue_type is MISSING or rvalue_type is MISSING or not int_type.is_copyable_from(lvalue_type) or not int_type.is_copyable_from(rvalue_type):
+                self_break_types.append({
+                    "exception": self.MISSING_INTEGERS.get_type()
+                })
 
-    def jump(self, context):
-        lvalue = evaluate(self.lvalue, context)
-        rvalue = evaluate(self.rvalue, context)
-        if not isinstance(lvalue, int) or not isinstance(rvalue, int):
-            raise self.MISSING_INTEGERS()
-        raise BreakException(
-            "value",
-            lvalue + rvalue
-        )
+            return merge_break_types(self_break_types + [
+                lexpression_break_types,
+                rexpression_break_types, {
+                    "value": result_type
+                }
+            ])
 
+        def jump(self, context):
+            lvalue = evaluate(self.lvalue, context)
+            rvalue = evaluate(self.rvalue, context)
+            if not isinstance(lvalue, int) or not isinstance(rvalue, int):
+                raise self.MISSING_INTEGERS()
+            raise BreakException(
+                "value",
+                func(lvalue, rvalue)
+            )
 
-class MultiplicationOpcode(Opcode):
-    MISSING_INTEGERS = TypeErrorFactory("MultiplicationOpcode: missing_integers")
-
-    def __init__(self, data, visitor):
-        super(MultiplicationOpcode, self).__init__(data)
-        self.lvalue = enrich_opcode(self.data["lvalue"], visitor)
-        self.rvalue = enrich_opcode(self.data["rvalue"], visitor)
-
-    def get_break_types(self, context):
-        lvalue_type, lexpression_break_types = get_expression_break_types(self.lvalue, context, MISSING)
-        rvalue_type, rexpression_break_types = get_expression_break_types(self.rvalue, context, MISSING)
-
-        int_type = IntegerType()
-        self_break_types = []
-
-        if lvalue_type is MISSING or rvalue_type is MISSING or not int_type.is_copyable_from(lvalue_type) or not int_type.is_copyable_from(rvalue_type):
-            self_break_types.append({
-                "exception": self.MISSING_INTEGERS.get_type()
-            })
-
-        return merge_break_types(self_break_types + [
-            lexpression_break_types,
-            rexpression_break_types, {
-                "value": IntegerType()
-            }
-        ])
-
-    def jump(self, context):
-        lvalue = evaluate(self.lvalue, context)
-        rvalue = evaluate(self.rvalue, context)
-        if not isinstance(lvalue, int) or not isinstance(rvalue, int):
-            raise self.MISSING_INTEGERS()
-        raise BreakException(
-            "value",
-            lvalue * rvalue
-        )
+    return NewOpcode
 
 
 class DereferenceOpcode(Opcode):
@@ -563,6 +613,7 @@ class DereferenceOpcode(Opcode):
     def __repr__(self):
         return "Dereference< {}.{} >".format(self.of, self.reference)
 
+
 def dynamic_get_reference_and_of(context, reference):
     argument = getattr(context, "argument", MISSING)
     if argument is not MISSING and isinstance(argument, Object) and reference in argument:
@@ -575,6 +626,7 @@ def dynamic_get_reference_and_of(context, reference):
     outer = getattr(context, "outer", MISSING)
     if outer is not MISSING and isinstance(outer, Object):
         return dynamic_get_reference_and_of(outer, reference)
+
 
 class DynamicDereferenceOpcode(Opcode):
     INVALID_DEREFERENCE = TypeErrorFactory("DynamicDereferenceOpcode: invalid_dereference")
@@ -651,6 +703,8 @@ OPCODES = {
     "comma": CommaOpcode,
     "prepare": PrepareOpcode,
     "jump": JumpOpcode,
+    "loop": LoopOpcode,
+    "conditional": ConditionalOpcode,
     "transform": TransformBreak,
     "assignment": AssignmentOpcode,
     "literal": LiteralValueOpcode,
@@ -660,20 +714,26 @@ OPCODES = {
     "dereference": DereferenceOpcode,
     "dynamic_dereference": DynamicDereferenceOpcode,
     "context": ContextOpcode,
-    "addition": AdditionOpcode,
-    "multiplication": MultiplicationOpcode
+    "addition": BinaryOpcode(lambda a, b: a + b, IntegerType(), "addition"),
+    "multiplication": BinaryOpcode(lambda a, b: a * b, IntegerType(), "multiplication"),
+    "modulus": BinaryOpcode(lambda a, b: a % b, BooleanType(), "modulus"),
+    "gte": BinaryOpcode(lambda a, b: a >= b, BooleanType(), "gte"),
+    "lte": BinaryOpcode(lambda a, b: a <= b, BooleanType(), "gte"),
+    "equals": BinaryOpcode(lambda a, b: a == b, BooleanType(), "equals"),
 }
 
 
 def enrich_opcode(data, visitor):
     if visitor:
         data = visitor(data)
-    opcode_type = OPCODES.get(data["opcode"], MISSING)
 
-    if opcode_type is MISSING:
-        raise PreparationException("Unknown opcode {}".format(data))
+    opcode = data.get("opcode", MISSING)
+    if opcode is MISSING:
+        raise PreparationException("No opcode found in {}".format(data))
+    if opcode not in OPCODES:
+        raise PreparationException("Unknown opcode {} in {}".format(opcode, data))
 
-    return opcode_type(data, visitor)
+    return OPCODES[opcode](data, visitor)
 
 
 def evaluate(expression, context):
@@ -714,6 +774,7 @@ def enrich_type(data):
 
     return type_constructor(data)
 
+
 class UnboundDereferenceBinder(object):
 
     def __init__(self, context):
@@ -753,8 +814,8 @@ class UnboundDereferenceBinder(object):
                 })
 
     def __call__(self, expression):
-        if isinstance(expression, basestring):
-            pass
+        if not isinstance(expression, dict):
+            raise FatalException()
         if expression["opcode"] == "unbound_dereference":
             reference = expression["reference"]
             if reference == "bam":
@@ -776,8 +837,10 @@ class UnboundDereferenceBinder(object):
             return code
         return expression
 
+
 class InvalidArgumentException(Exception):
     pass
+
 
 class PreparedFunction(object):
     INVALID_LOCAL = TypeErrorFactory("PreparedFunction: invalid_local")
@@ -801,8 +864,8 @@ class PreparedFunction(object):
         static_code = enrich_opcode(self.data["static"], static_unbound_dereference_binder)
         try:
             self.static = evaluate(static_code, self.static_evaluation_context)
-        except BreakException:
-            raise PreparationException("BreakException while evaluating statics")
+        except BreakException as e:
+            raise PreparationException("BreakException while evaluating statics: {}: {}".format(e.mode, e.value))
 
         self.argument_type = enrich_type(self.static.argument)
 
@@ -866,6 +929,11 @@ class PreparedFunction(object):
             "return": { "type": "Void" }
         });
 
+        default_break_type = MISSING
+
+        if "all" in break_types_data:
+            default_break_type = enrich_type(break_types_data["all"])
+
         self.break_types = {
             mode: enrich_type(type_data) for mode, type_data in break_types_data.items()
         }
@@ -877,8 +945,9 @@ class PreparedFunction(object):
             did_not_terminate_break_types,
         ])
 
-        for break_mode, actual_break_type in actual_break_types.items():
-            declared_break_type = self.break_types.get(break_mode, MISSING)
+        for break_mode, actual_break_type in actual_break_types.items():        
+            declared_break_type = self.break_types.get(break_mode, default_break_type)
+
             if isinstance(declared_break_type, InferredType):
                 self.break_types[break_mode] = actual_break_type
                 continue
@@ -891,6 +960,8 @@ class PreparedFunction(object):
         for break_mode, declared_break_type in self.break_types.items():
             if isinstance(declared_break_type, InferredType):
                 del self.break_types[break_mode]
+
+        self.break_types = dict(self.break_types)
 
     def get_type(self):
         return FunctionType(self.argument_type, self.break_types)
@@ -925,8 +996,7 @@ class PreparedFunction(object):
             except CreateReferenceError:
                 raise self.INVALID_LOCAL()
 
-            if self.code:
-                evaluate(self.code, evaluation_context)
+            evaluate(self.code, evaluation_context)
 
             raise self.DID_NOT_TERMINATE()
         except BreakException as e:
@@ -953,6 +1023,7 @@ def enforce_application_break_mode_constraints(function):
     exit_break_type = function.break_types.get("exit", None)
     if exit_break_type and not IntegerType().is_copyable_from(exit_break_type):
         raise InvalidApplicationException("Application exits with {}, when Integer is expected".format(exit_break_type))
+
 
 def execute(ast):
     executor = PreparedFunction(ast)

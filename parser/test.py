@@ -8,8 +8,9 @@ from unittest.case import TestCase
 
 from parser.rdhparser import parse
 from parser.visitor import new_object_op, type_op, object_type, assignment_op, \
-    symbolic_dereference_ops, literal_op, break_op, addition_op, jump_op, \
-    prepare_op, merge_op, nop, comma_op, transform_op, function_type, catch_op
+    symbolic_dereference_ops, literal_op, break_op, jump_op, \
+    prepare_op, merge_op, nop, comma_op, transform_op, function_type, catch_op, \
+    binary_op
 from utils import MISSING
 
 
@@ -69,6 +70,7 @@ class TestFunctionParsing(TestCase):
                     "argument": type_op("Void"),
                 }),
                 "local_initializer": new_object_op({}),
+                "code": break_op("return", nop())
             }
         )
 
@@ -141,7 +143,7 @@ class TestFunctionParsing(TestCase):
                 "argument": type_op("Void")
             }),
             "local_initializer": new_object_op({}),
-            "code": addition_op(literal_op(4), literal_op(38))
+            "code": binary_op("addition", literal_op(4), literal_op(38))
         }
 
         self.assertEquals(ast, CORRECT)
@@ -166,7 +168,8 @@ class TestLocalVariables(TestCase):
             }),
             "local_initializer": new_object_op({
                 "foo": literal_op(42)
-            })
+            }),
+            "code": break_op("return", nop())
         }
         self.assertEquals(ast, CORRECT)
 
@@ -218,19 +221,16 @@ class TestLocalVariables(TestCase):
                 "static": new_object_op({
                     "argument": type_op("Void"),
                     "breaks": new_object_op({
-                        "return": type_op("Void")
+                        "all": type_op("Inferred")
                     }),
                     "local": object_type({
-                        "foo": type_op("Integer"),
                         "bar": type_op("String")
                     }),
                 }),
-                "local_initializer": merge_op(
-                    symbolic_dereference_ops(["outer", "local"]),
-                    new_object_op({
-                        "bar": literal_op("hello")
-                    })
-                )
+                "local_initializer": new_object_op({
+                    "bar": literal_op("hello")
+                }),
+                "code": break_op("return", nop())
             })), nop())
         }
 
@@ -261,25 +261,22 @@ class TestLocalVariables(TestCase):
             "code": comma_op([
                 assignment_op(
                     symbolic_dereference_ops(["foo"]),
-                    addition_op(symbolic_dereference_ops(["foo"]), literal_op(3))
+                    binary_op("addition", symbolic_dereference_ops(["foo"]), literal_op(3))
                 ),
                 jump_op(prepare_op(literal_op({
                     "static": new_object_op({
                         "argument": type_op("Void"),
                         "breaks": new_object_op({
-                            "return": type_op("Void")
+                            "all": type_op("Inferred")
                         }),
                         "local": object_type({
-                            "foo": type_op("Integer"),
                             "bar": type_op("String")
                         })
                     }),
-                    "local_initializer": merge_op(
-                        symbolic_dereference_ops(["outer", "local"]),
-                        new_object_op({
-                            "bar": literal_op("hello")
-                        })
-                    )
+                    "local_initializer": new_object_op({
+                        "bar": literal_op("hello")
+                    }),
+                    "code": break_op("return", nop())
                 })), nop())
             ])
         }
@@ -309,11 +306,12 @@ class TestObjectTypes(TestCase):
             }),
             "local_initializer": new_object_op({
                 "foo": new_object_op({ "bar": literal_op(5) })
-            })
+            }),
+            "code": break_op("return", nop())
         }
         self.assertEquals(ast, CORRECT)
 
-class TestExtraStatics(TestCase):
+class TestExtraStatic(TestCase):
     def test_extra_statics(self):
         ast = parse("""
             function(Void => Integer) nothrow {
@@ -331,8 +329,6 @@ class TestExtraStatics(TestCase):
             "local_initializer": new_object_op({}),
             "code": transform_op(symbolic_dereference_ops(["foo"]), input="value", output="return")
         }
-        print json.dumps(ast)
-        print json.dumps(CORRECT)
         self.assertEquals(ast, CORRECT)
 
 class TestNestedFunctions(TestCase):

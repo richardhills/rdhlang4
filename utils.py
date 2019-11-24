@@ -16,6 +16,10 @@ class InternalMarker(object):
     def __str__(self):
         return self.name
 
+def default(value, marker, defaultIfMarker):
+    if value is marker:
+        return defaultIfMarker
+    return value
 
 MISSING = InternalMarker("MISSING")
 

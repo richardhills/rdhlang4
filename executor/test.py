@@ -6,7 +6,7 @@ import json
 from unittest.case import TestCase
 
 from executor.executor import PreparedFunction, PreparationException, \
-    BreakException, JumpOpcode, DynamicDereferenceOpcode
+    BreakException, JumpOpcode, DynamicDereferenceOpcode, PrepareOpcode
 from parser.rdhparser import parse, prepare_code
 from type_system.core_types import ObjectType, IntegerType, merge_types
 
@@ -390,12 +390,21 @@ class TestMiscelaneous(TestCase):
 
     def test4(self):
         function = prepare_code("""foo = function(Void => Integer) {};""");
-        function.invoke()
+
+        expected = merge_types([
+            PrepareOpcode.PREPARATION_ERROR.get_type()
+        ])
+
+        self.assertTrue(expected.is_copyable_from(function.break_types["exception"]))
+
+        with self.assertRaises(BreakException):
+            function.invoke()
  
     def test5(self):
         function = prepare_code("""foo = function(Void => Integer) {}; foo();""")
 
         expected = merge_types([
+            PrepareOpcode.PREPARATION_ERROR.get_type(),
             JumpOpcode.INVALID_ARGUMENT.get_type(),
             JumpOpcode.MISSING_FUNCTION.get_type(),
             JumpOpcode.UNKNOWN_BREAK_MODE.get_type(),
@@ -449,3 +458,41 @@ class TestMiscelaneous(TestCase):
         """)
 
         self.assertEquals(function.invoke(), "hello")
+
+class TestEuler(TestCase):
+#     def testProblem1a(self):
+#         function = prepare_code("""
+#             var answer = 1;
+#             for(var i in range(1000)) {
+#                 if(i % 3 == 0 and i % 5 == 0) {
+#                     answer = answer * i;
+#                 }
+#             }
+#             return i;
+#         """)
+#         self.assertEquals(function.invoke(), 233168)
+
+
+#     def testProblem1b(self):
+#         function = prepare_code("""
+#             exit sum( [ i for i in range(1000) if i % 3 == 0 and i % 5 == 0 ] );
+#         """)
+#         self.assertEquals(function.invoke(), 233168)
+
+    def testProblem2(self):
+        return
+        function = prepare_code("""
+            var a = 1, b = 2;
+            var answer = 0;
+            while(b <= 4000000) {
+                if(b % 2 == 0) {
+                    answer = answer + b;
+                };
+                var z = a + b;
+                b = z;
+                a = b;
+            };
+            exit answer;
+        """)
+        print json.dumps(function.data)
+        self.assertEquals(function.invoke(), 233168)

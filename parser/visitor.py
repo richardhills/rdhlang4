@@ -3,7 +3,9 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 
 from parser.langVisitor import langVisitor
-from utils import spread_dict, MISSING, InternalMarker
+from utils import spread_dict, MISSING, InternalMarker, default
+from distutils.log import FATAL
+from exception_types import FatalException
 
 
 class ParseError(Exception):
@@ -115,6 +117,23 @@ def comma_op(expressions, ctx=None):
         "expressions": expressions
     }, ctx)
 
+def loop_op(expression, ctx=None):
+    if not is_expression(expression):
+        raise InvalidCodeError()
+    return add_debugging({
+        "opcode": "loop",
+        "code": expression
+    }, ctx)
+
+def conditional_op(condition, true_code, false_code, ctx=None):
+    if not is_expression(condition) or not is_expression(true_code) or not is_expression(false_code):
+        raise InvalidCodeError()
+    return add_debugging({
+        "opcode": "conditional",
+        "condition": condition,
+        "true_code": true_code,
+        "false_code": false_code
+    }, ctx)
 
 def jump_op(function_expression, argument_expression, ctx=None):
     if not is_expression(function_expression):
@@ -166,24 +185,13 @@ def catch_op(type, code_expression, ctx=None):
         "code": code_expression
     }, ctx)
 
-
-def addition_op(lvalue, rvalue, ctx=None):
+def binary_op(opcode, lvalue, rvalue, ctx=None):
     if not is_expression(lvalue) or not is_expression(rvalue):
         raise InvalidCodeError()
     return add_debugging({
-        "opcode": "addition",
+        "opcode": opcode,
         "lvalue": lvalue,
         "rvalue": rvalue
-    }, ctx)
-
-
-def multiplication_op(lvalue, rvalue, ctx=None):
-    if not is_expression(lvalue) or not is_expression(rvalue):
-        raise InvalidCodeError()
-    return add_debugging({
-        "opcode": "multiplication",
-        "lvalue": lvalue,
-        "rvalue": rvalue,
     }, ctx)
 
 
@@ -233,152 +241,6 @@ def symbolic_dereference_ops(parts, ctx=None):
         return dereference_op(literal_op(parts[-1], ctx), symbolic_dereference_ops(parts[:-1], ctx), ctx)
 
 
-def decompose_function(
-    argument_type_expression,
-    breaks_types,
-    extra_statics,
-    local_variable_types,
-    local_initializer,
-    code_expressions,
-    ctx=None
-):
-    code_for_us = []
-    local_variable_declaration = static_value_declaration = None
-    code_for_remainder_function = None
-    need_remainder_function = True
-
-    for index, code_expression in enumerate(code_expressions):
-        if isinstance(code_expression, LocalVariableDeclaration):
-            local_variable_declaration = code_expression
-            code_for_remainder_function = code_expressions[index + 1:]
-            break
-        elif isinstance(code_expression, StaticValueDeclaration):
-            static_value_declaration = code_expression
-            code_for_remainder_function = code_expressions[index + 1:]
-            break
-        else:
-            code_for_us.append(code_expression)
-    else:
-        need_remainder_function = False
-
-    need_function_for_us = (
-        len(code_for_us) > 0
-        or not need_remainder_function
-        or len(local_variable_types) > 0
-        or len(extra_statics) > 0
-    )
-
-    if need_remainder_function:
-        remainder_function_local_variable_types = local_variable_types
-        new_variable_initializer = old_variables_initializer = None
-
-        if local_variable_declaration:
-            remainder_function_local_variable_types = spread_dict(
-                remainder_function_local_variable_types, {
-                    local_variable_declaration.name: local_variable_declaration.type
-                }
-            )
-
-            new_variable_initializer = new_object_op({
-                local_variable_declaration.name: local_variable_declaration.initial_value
-            }, ctx)
-
-        if len(local_variable_types) > 0:
-            old_variables_initializer = symbolic_dereference_ops(["outer", "local"])
-
-        if old_variables_initializer:
-            if new_variable_initializer:
-                remainder_function_local_variable_initializer = merge_op(
-                    old_variables_initializer,
-                    new_variable_initializer
-                )
-            else:
-                remainder_function_local_variable_initializer = old_variables_initializer
-        else:
-            if new_variable_initializer:
-                remainder_function_local_variable_initializer = new_variable_initializer
-            else:
-                remainder_function_local_variable_initializer = new_object_op({}, None)
-
-        remainder_function_extra_statics = dict(extra_statics)
-        if static_value_declaration:
-            remainder_function_extra_statics[static_value_declaration.name] = static_value_declaration.value
-
-        if need_function_for_us:
-            remainder_function = decompose_function(
-                type_op("Void", ctx),
-                breaks_types,
-                remainder_function_extra_statics,
-                remainder_function_local_variable_types,
-                remainder_function_local_variable_initializer,
-                code_for_remainder_function,
-                ctx
-            )
-
-            code_for_us.append(
-                jump_op(
-                    prepare_op(literal_op(remainder_function, ctx), ctx), nop(), ctx
-                ),
-            )
-        else:
-            remaining_code_function = decompose_function(
-                argument_type_expression,
-                breaks_types,
-                remainder_function_extra_statics,
-                remainder_function_local_variable_types,
-                remainder_function_local_variable_initializer,
-                code_for_remainder_function,
-                ctx
-            )
-
-    if need_function_for_us:
-        return function_literal(
-            argument_type_expression,
-            breaks_types,
-            extra_statics,
-            object_type(local_variable_types, ctx),
-            local_initializer,
-            code_for_us,
-            ctx
-        )
-    else:
-        return remaining_code_function
-
-
-def function_literal(
-    argument_type_expression,
-    breaks_types,
-    extra_statics,
-    local_type_expression,
-    local_initializer,
-    code_expressions,
-    ctx=None
-):
-    function_literal = {
-        "static": new_object_op(spread_dict(extra_statics, {
-            "breaks": new_object_op(breaks_types),
-            "local": local_type_expression,
-            "argument": argument_type_expression
-        }), ctx)
-    }
-
-    if local_initializer:
-        function_literal["local_initializer"] = local_initializer
-
-    for c in code_expressions:
-        if not isinstance(c, dict):
-            raise InvalidCodeError()
-        if not is_expression(c):
-            raise InvalidCodeError()
-
-    if len(code_expressions) > 0:
-        if len(code_expressions) > 1:
-            function_literal["code"] = comma_op(code_expressions, ctx)
-        else:
-            function_literal["code"] = code_expressions[0]
-
-    return function_literal
-
 NO_THROWS = InternalMarker("NO_THROWS")
 
 NO_EXIT = InternalMarker("NO_EXIT")
@@ -411,32 +273,142 @@ class StaticValueDeclaration(object):
         self.value = value
 
 
+class FunctionStub(object):
+    def __init__(
+        self,
+        code_expressions=MISSING,
+        local_variable_types=MISSING,
+        local_initializer=MISSING,
+        extra_statics=MISSING,
+        argument_type_expression=MISSING,
+        breaks_types=MISSING
+    ):
+        self.code_expressions = code_expressions
+        self.local_variable_types = local_variable_types
+        self.local_initializer = local_initializer
+        self.extra_statics = extra_statics
+        self.argument_type_expression = argument_type_expression
+        self.breaks_types = breaks_types
+
+    def chain(self, other):
+        can_merge_functions = True
+
+        if other.argument_type_expression is not MISSING:
+            # If the inner function needs an argument, we have no mechanism to provide it
+            raise InvalidCodeError()
+        if other.breaks_types is not MISSING:
+            # The newly created function ignores other.breaks_types, so let's fail early if they're provided
+            raise InvalidCodeError()
+
+        if self.local_variable_types is not MISSING and other.local_variable_types is not MISSING:
+            # We can only take local variables from one of the two functions
+            can_merge_functions = False
+        if self.code_expressions is not MISSING and other.local_variable_types is not MISSING:
+            # We have code that should execute before the other functions local variables are declared
+            can_merge_functions = False
+        if self.extra_statics is not MISSING and other.extra_statics is not MISSING:
+            # We can only take extra statics from one of the two functions
+            can_merge_functions = False
+        if self.extra_statics is not MISSING and other.local_variable_types is not MISSING:
+            # The inner local_variable_types might reference something from statics
+            can_merge_functions = False
+
+        new_code_expressions = None
+        our_code_expressions = default(self.code_expressions, MISSING, [])
+        other_code_expressions = default(other.code_expressions, MISSING, [])
+
+        if can_merge_functions:
+            new_code_expressions = our_code_expressions + other_code_expressions
+            local_variable_types = default(self.local_variable_types, MISSING, other.local_variable_types)
+            local_initializer = default(self.local_initializer, MISSING, other.local_initializer)
+            extra_statics = default(self.extra_statics, MISSING, other.extra_statics)
+        else:
+            new_code_expressions = our_code_expressions + [ other.create("expression") ]
+            local_variable_types = self.local_variable_types
+            local_initializer = self.local_initializer
+            extra_statics = self.extra_statics
+
+        return FunctionStub(
+            code_expressions=new_code_expressions,
+            local_variable_types=local_variable_types,
+            local_initializer=local_initializer,
+            extra_statics=extra_statics,
+            argument_type_expression=self.argument_type_expression,
+            breaks_types=self.breaks_types
+        )
+
+    def requires_function(self):
+        return (
+            self.argument_type_expression is not MISSING
+            or self.local_variable_types is not MISSING
+            or self.extra_statics is not MISSING
+            or self.breaks_types is not MISSING
+        )
+
+    def create(self, output_mode):
+        if output_mode not in ("function", "expression"):
+            raise FatalException()
+
+        code_expressions = default(self.code_expressions, MISSING, [])
+
+        for c in code_expressions:
+            if not isinstance(c, dict):
+                raise InvalidCodeError()
+            if not is_expression(c):
+                raise InvalidCodeError()
+
+        if len(code_expressions) > 0:
+            if len(code_expressions) > 1:
+                code_expression = comma_op(code_expressions)
+            else:
+                code_expression = code_expressions[0]
+        else:
+            code_expression = break_op("return", nop())
+
+        if not self.requires_function() and output_mode == "expression":
+            return code_expression
+
+        result = {}
+
+        statics = {}
+
+        if self.argument_type_expression is not MISSING:
+            statics["argument"] = self.argument_type_expression
+        else:
+            statics["argument"] = type_op("Void")
+
+        if self.local_variable_types is not MISSING:
+            statics["local"] = object_type(self.local_variable_types)
+        else:
+            statics["local"] = object_type({})
+
+        if self.local_initializer is not MISSING:
+            result["local_initializer"] = self.local_initializer
+        else:
+            result["local_initializer"] = new_object_op({})
+
+        if self.breaks_types is not MISSING:
+            statics["breaks"] = new_object_op(self.breaks_types)
+        else:
+            statics["breaks"] = new_object_op({ "all": type_op("Inferred") })
+
+        if self.extra_statics is not MISSING:
+            statics = spread_dict(self.extra_statics, statics)
+
+        result["static"] = new_object_op(statics)
+
+        result["code"] = code_expression
+
+        if output_mode == "function":
+            return result
+        elif output_mode == "expression":
+            return jump_op(prepare_op(literal_op(result)), nop())
+
 class RDHLang4Visitor(langVisitor):
 
     def __init__(self, *args, **kwargs):
         self.debug = kwargs.pop("debug", False)
         langVisitor.__init__(self, *args, **kwargs)
-
-    def visitLocalVariableDeclaration(self, ctx):
-        type, initialValue = ctx.expression()
-        type = self.visit(type)
-        initialValue = self.visit(initialValue)
-        name = ctx.SYMBOL().getText()
-        return LocalVariableDeclaration(type, name, initialValue)
-
-    def visitStaticValueDeclaration(self, ctx):
-        value = self.visit(ctx.expression())
-        name = ctx.SYMBOL().getText()
-        return StaticValueDeclaration(name, value)
-
-    def visitTypedef(self, ctx):
-        value = self.visit(ctx.expression())
-        name = ctx.SYMBOL().getText()
-        return StaticValueDeclaration(name, value)
-
-    def visitExit(self, ctx):
-        value = self.visit(ctx.expression())
-        return transform_op(value, ctx, output="exit")
 
     def visitString(self, ctx):
         return literal_op(ctx.STRING().getText()[1:-1], ctx if self.debug else None)
@@ -461,13 +433,37 @@ class RDHLang4Visitor(langVisitor):
         lvalue, rvalue = ctx.expression()
         lvalue = self.visit(lvalue)
         rvalue = self.visit(rvalue)
-        return addition_op(lvalue, rvalue, ctx if self.debug else None)
+        return binary_op("addition", lvalue, rvalue, ctx if self.debug else None)
 
     def visitMultiplication(self, ctx):
         lvalue, rvalue = ctx.expression()
         lvalue = self.visit(lvalue)
         rvalue = self.visit(rvalue)
-        return multiplication_op(lvalue, rvalue, ctx if self.debug else None)
+        return binary_op("multiplication", lvalue, rvalue, ctx if self.debug else None)
+
+    def visitModulus(self, ctx):
+        lvalue, rvalue = ctx.expression()
+        lvalue = self.visit(lvalue)
+        rvalue = self.visit(rvalue)
+        return binary_op("modulus", lvalue, rvalue, ctx if self.debug else None)
+
+    def visitGte(self, ctx):
+        lvalue, rvalue = ctx.expression()
+        lvalue = self.visit(lvalue)
+        rvalue = self.visit(rvalue)
+        return binary_op("gte", lvalue, rvalue, ctx if self.debug else None)
+
+    def visitLte(self, ctx):
+        lvalue, rvalue = ctx.expression()
+        lvalue = self.visit(lvalue)
+        rvalue = self.visit(rvalue)
+        return binary_op("lte", lvalue, rvalue, ctx if self.debug else None)
+
+    def visitEquals(self, ctx):
+        lvalue, rvalue = ctx.expression()
+        lvalue = self.visit(lvalue)
+        rvalue = self.visit(rvalue)
+        return binary_op("equals", lvalue, rvalue, ctx if self.debug else None)
 
     def visitNewObject(self, ctx):
         result = {}
@@ -491,27 +487,90 @@ class RDHLang4Visitor(langVisitor):
             return int(ctx.NUMBER().getText())
         return super(RDHLang4Visitor, self).visitLiteral(ctx)
 
-    def visitToStatementList(self, ctx):
-        break_types = {
-            "exception": type_op("Inferred"),
-            "return": type_op("Inferred"),
-            "exit": type_op("Inferred")
-        }
-        statements = [self.visit(s) for s in ctx.statement()]
+#     def visitFunctionStub(self, ctx):
+#         result = []
+#         for statement in ctx.statement():
+#             statement = self.visit(statement)
+#             if isinstance(statement, list):
+#                 result.extend(statement)
+#             else:
+#                 result.append(statement)
+# 
+#         for r in result:
+#             if r is None:
+#                 raise InvalidCodeError()
+# 
+#         return result
 
-        if len(statements) > 0 and is_expression(statements[-1]):
-            statements[-1] = break_op("return", statements[-1])
+    def visitToFunctionStub(self, ctx):
+        function_stub = self.visit(ctx.functionStub())
+
+        code_expressions = default(function_stub.code_expressions, MISSING, [])
+        if len(code_expressions) > 0:
+            code_expressions[-1] = break_op("return", code_expressions[-1])
         else:
-            statements = statements + [ break_op("exit", literal_op(0)) ]
+            code_expressions.append(break_op("exit", literal_op(0)))
 
-        return decompose_function(
-            type_op("Void"),
-            break_types,
-            {},
-            {},
-            new_object_op({}),
-            statements
+        return function_stub.create("function")        
+
+    def visitSymbolInitialization(self, ctx):
+        return (
+            ctx.SYMBOL().getText(),
+            self.visit(ctx.expression())
         )
+
+    def visitLocalVariableDeclaration(self, ctx):
+        type = self.visit(ctx.expression())
+
+        previous_function = ctx.functionStub()
+        if previous_function:
+            previous_function = self.visit(previous_function)
+
+        for symbol_initialization in reversed(ctx.symbolInitialization()):
+            name, initial_value = self.visit(symbol_initialization)
+
+            new_function = FunctionStub(
+                local_variable_types={ name: type },
+                local_initializer=new_object_op({ name: initial_value })
+            )
+            if previous_function:
+                new_function = new_function.chain(previous_function)
+            previous_function = new_function
+
+        return new_function
+
+    def visitStaticValueDeclaration(self, ctx):
+        previous_function = self.visit(ctx.functionStub())
+
+        name, value = self.visit(ctx.symbolInitialization())
+
+        return FunctionStub(
+            extra_statics={ name: value }
+        ).chain(previous_function)
+
+    def visitTypedef(self, ctx):
+        previous_function = self.visit(ctx.functionStub())
+
+        value = self.visit(ctx.expression())
+        name = ctx.SYMBOL().getText()
+
+        return FunctionStub(
+            extra_statics={ name: value },
+        ).chain(previous_function)
+
+    def visitToExpression(self, ctx):
+        code_expressions = [self.visit(e) for e in ctx.expression()]
+
+        new_function = FunctionStub(
+            code_expressions=code_expressions
+        )
+
+        previous_function = ctx.functionStub()
+        if previous_function:
+            previous_function = self.visit(previous_function)
+            new_function = new_function.chain(previous_function)
+
+        return new_function
 
     def visitObjectLiteral(self, ctx):
         result = {}
@@ -560,6 +619,9 @@ class RDHLang4Visitor(langVisitor):
     def visitReturnExpression(self, ctx):
         return transform_op(self.visit(ctx.expression()), ctx if self.debug else None, "value", "return")
 
+    def visitExitExpression(self, ctx):
+        return transform_op(self.visit(ctx.expression()), ctx if self.debug else None, "value", "exit")
+
     def visitInferredType(self, ctx):
         return type_op("Inferred", ctx if self.debug else None)
 
@@ -598,6 +660,30 @@ class RDHLang4Visitor(langVisitor):
     def visitPropertyType(self, ctx):
         return (self.visit(ctx.expression()), ctx.SYMBOL().getText())
 
+    def visitWhileLoop(self, ctx):
+        function_stub = self.visit(ctx.functionStub())
+        conditional = self.visit(ctx.expression())
+
+        function_stub.code_statements.insert(
+            0, conditional_op(conditional, break_op("loop_break", MISSING), nop(), ctx)
+        )
+
+        return catch_op(
+            "loop_break",
+            loop_op(function_stub.create("expression"))
+        )
+
+    def visitIfBlock(self, ctx):
+        function_stub = self.visit(ctx.functionStub())
+        conditional = self.visit(ctx.expression())
+
+        return conditional_op(
+            conditional,
+            function_stub.create("expression"),
+            nop(),
+            ctx
+        )
+
     def visitFunctionLiteral(self, ctx):
         argument_type, return_type = self.visit(ctx.functionArgumentAndReturns())
 
@@ -622,14 +708,16 @@ class RDHLang4Visitor(langVisitor):
         if function_exits is not NO_EXIT:
             breaks["exit"] = function_exits
 
-        return decompose_function(
-            argument_type,
-            breaks,
-            {}, {},
-            new_object_op({}, ctx if self.debug else None),
-            [self.visit(s) for s in ctx.statement()],
-            ctx if self.debug else None
+        our_function = FunctionStub(
+            argument_type_expression=argument_type, breaks_types=breaks
         )
+
+        remainder_function = ctx.functionStub()
+        if remainder_function:
+            remainder_function = self.visit(remainder_function)
+            our_function = our_function.chain(remainder_function)
+
+        return our_function.create("function")
 
     def visitFunctionArgumentAndReturns(self, ctx):
         possible_argument_and_return_type = ctx.expression()

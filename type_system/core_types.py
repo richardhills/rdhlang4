@@ -2,10 +2,11 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-from exception_types import DataIntegrityError
-from utils import MISSING
 from __builtin__ import False
 from pickle import FALSE
+
+from exception_types import DataIntegrityError, CrystalValueCanNotBeGenerated
+from utils import MISSING
 
 
 def are_bindable(first, second, first_is_rev_const, second_is_rev_const, ignore_void_types=False):
@@ -48,7 +49,7 @@ class Type(object):
         return self
 
     def get_crystal_value(self):
-        raise NotImplementedError(type(self))
+        raise CrystalValueCanNotBeGenerated()
 
 
 class StringType(Type):
@@ -434,7 +435,8 @@ class ListType(Type):
         return True
 
     def get_crystal_value(self):
-        return [p.get_crystal_value() for p in self.property_types]
+        from type_system.values import List
+        return List([p.get_crystal_value() for p in self.entry_types])
 
 class FunctionType(Type):
 

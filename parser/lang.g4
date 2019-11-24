@@ -5,7 +5,18 @@ grammar lang;
 
 code
    : literal			# toLiteral
-   | (statement ';')*   # toStatementList
+   | functionStub       # toFunctionStub
+   ;
+
+functionStub
+   : expression symbolInitialization (',' symbolInitialization)* ';' functionStub? # localVariableDeclaration
+   | 'static' symbolInitialization ';' functionStub? # staticValueDeclaration
+   | 'typedef' expression SYMBOL ';' functionStub? # typedef
+   | (expression ';')+ functionStub? # toExpression
+   ;
+
+symbolInitialization
+   : SYMBOL '=' expression
    ;
 
 newObject
@@ -47,9 +58,15 @@ expression
    | expression '(' expression ')' # singleParameterFunctionInvocation
    | expression '*' expression     # multiplication
    | expression '+' expression     # addition
+   | expression '%' expression     # modulus
+   | expression '>=' expression    # gte
+   | expression '<=' expression    # lte
+   | expression '==' expression    # equals
    | expression '=' expression     # assignment
    | STRING                        # string
    | NUMBER                        # number
+   | whileLoop                     # toWhileLoop
+   | ifBlock                       # toIf
    | functionLiteral               # toFunctionLiteral
    | newObject                     # toNewObject
    | array                         # toArray
@@ -64,14 +81,7 @@ expression
    | objectType                    # toObjectType
    | anyType                       # toAnyType
    | returnExpression              # toReturnExpression
-   ;
-
-statement
-   : expression SYMBOL '=' expression # localVariableDeclaration
-   | 'static' SYMBOL '=' expression # staticValueDeclaration
-   | 'typedef' expression SYMBOL # typedef
-   | 'exit' expression # exit
-   | expression # toExpression
+   | exitExpression                # toExitExpression
    ;
 
 voidType
@@ -106,8 +116,16 @@ propertyType
    : expression SYMBOL
    ;
 
+whileLoop
+   : 'while' '(' expression ')' '{' functionStub? '}'
+   ;
+
+ifBlock
+   : 'if' '(' expression ')' '{' functionStub? '}'
+   ;
+
 functionLiteral
-   : 'function' functionArgumentAndReturns functionThrows? functionExits? '{' (statement ';')* '}'
+   : 'function' functionArgumentAndReturns functionThrows? functionExits? '{' functionStub? '}'
    ;
 
 functionArgumentAndReturns
@@ -127,6 +145,10 @@ functionExits
 
 returnExpression
    : 'return' expression
+   ;
+
+exitExpression
+   : 'exit' expression
    ;
 
 SYMBOL

@@ -16,6 +16,8 @@ class IncompatableAssignmentError(Exception):
     # codes access
     pass
 
+class CrystalValueCanNotBeGenerated(Exception):
+    pass
 
 class DataIntegrityError(Exception):
     # This error is fatal. Our data model doesn't match the data
