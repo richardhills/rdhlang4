@@ -100,6 +100,11 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#division.
+    def visitDivision(self, ctx):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#boundDereference.
     def visitBoundDereference(self, ctx):
         return self.visitChildren(ctx)
@@ -217,6 +222,11 @@ class langVisitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by langParser#true.
     def visitTrue(self, ctx):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#notEquals.
+    def visitNotEquals(self, ctx):
         return self.visitChildren(ctx)
 
 

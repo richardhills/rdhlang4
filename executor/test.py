@@ -6,7 +6,8 @@ import json
 from unittest.case import TestCase
 
 from executor.executor import PreparedFunction, PreparationException, \
-    BreakException, JumpOpcode, DynamicDereferenceOpcode, PrepareOpcode
+    BreakException, JumpOpcode, DynamicDereferenceOpcode, PrepareOpcode, \
+    enforce_application_break_mode_constraints
 from parser.rdhparser import parse, prepare_code
 from type_system.core_types import ObjectType, IntegerType, merge_types
 
@@ -392,7 +393,8 @@ class TestMiscelaneous(TestCase):
         function = prepare_code("""foo = function(Void => Integer) {};""");
 
         expected = merge_types([
-            PrepareOpcode.PREPARATION_ERROR.get_type()
+            PrepareOpcode.PREPARATION_ERROR.get_type(),
+            DynamicDereferenceOpcode.INVALID_DEREFERENCE.get_type(),
         ])
 
         self.assertTrue(expected.is_copyable_from(function.break_types["exception"]))
@@ -420,6 +422,7 @@ class TestMiscelaneous(TestCase):
         function = prepare_code("""foo = function(Void => Integer) { return "hello"; }; foo();""")
 
         expected = merge_types([
+            PrepareOpcode.PREPARATION_ERROR.get_type(),
             JumpOpcode.INVALID_ARGUMENT.get_type(),
             JumpOpcode.MISSING_FUNCTION.get_type(),
             JumpOpcode.UNKNOWN_BREAK_MODE.get_type(),
@@ -459,6 +462,18 @@ class TestMiscelaneous(TestCase):
 
         self.assertEquals(function.invoke(), "hello")
 
+    def test10(self):
+        function = prepare_code("""
+            bam = function(Void => Integer) {
+                foo =123;
+                bar = foo * 233 + foo;
+                return bar;
+            };
+            bam();
+        """)
+        #self.assertNotEquals(function.break_types["exception"]["property_types"]["message"].value, "")
+        # Fails with PreparationError at run time which isn't caught at compile time
+
 class TestEuler(TestCase):
 #     def testProblem1a(self):
 #         function = prepare_code("""
@@ -488,10 +503,26 @@ class TestEuler(TestCase):
                     answer = answer + b;
                 };
                 var z = a + b;
-                b = z;
                 a = b;
+                b = z;
             };
             exit answer;
         """)
-        print json.dumps(function.data)
-        self.assertEquals(function.invoke(), 233168)
+        enforce_application_break_mode_constraints(function)
+        self.assertEquals(function.invoke(), 4613732)
+
+    def testProblem3(self):
+        function = prepare_code("""
+            var test = 2, target = 600851475143;
+            var current = target;
+            while(current != 1) {
+                if(current % test == 0) {
+                    current = current / test;
+                } else {
+                    test = test + 1;
+                };
+            };
+            exit test;
+        """)
+        enforce_application_break_mode_constraints(function)
+        self.assertEquals(function.invoke(), 6857)

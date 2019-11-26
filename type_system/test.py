@@ -451,6 +451,29 @@ class TestCompileTimeOneOfTypeChecks(TestCase):
             OneOfType([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "foo": StringType() }, False) ])
         )
 
+    def test_revconst_preserved(self):
+        self.assertEquals(
+            merge_types([ ObjectType({ "foo": IntegerType() }, True) ]),
+            ObjectType({ "foo": IntegerType() }, True)
+        )
+
+    def test_single_revconst_is_dominated_by_nonrevconst(self):
+        self.assertEquals(
+            merge_types([ ObjectType({ "foo": IntegerType() }, True), ObjectType({ "foo": IntegerType() }, False) ]),
+            ObjectType({ "foo": IntegerType() }, False)
+        )
+
+    def test_double_revconst_allows_merge(self):
+        self.assertEquals(
+            merge_types([ ObjectType({ "foo": UnitType(5) }, True), ObjectType({ "foo": IntegerType() }, True) ]),
+            ObjectType({ "foo": IntegerType() }, True)
+        )
+
+    def test_double_incompatible_revconst_blocks_merge(self):
+        self.assertEquals(
+            merge_types([ ObjectType({ "foo": UnitType(5) }, True), ObjectType({ "foo": UnitType(6) }, True) ]),
+            OneOfType([ ObjectType({ "foo": UnitType(5) }, True), ObjectType({ "foo": UnitType(6) }, True) ])
+        )
 
 class TestRuntimeMutationChecks(TestCase):
 

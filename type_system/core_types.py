@@ -48,6 +48,9 @@ class Type(object):
     def replace_inferred_types(self, other):
         return self
 
+    def remove_revconst(self):
+        return self
+
     def get_crystal_value(self):
         raise CrystalValueCanNotBeGenerated()
 
@@ -224,7 +227,7 @@ def flatten_types(types):
     result = []
     for type in types:
         if isinstance(type, OneOfType):
-            result.extend(type.types)
+            result.extend(flatten_types(type.types))
         else:
             result.append(type)
     return result
@@ -233,10 +236,14 @@ def dedupe_types(types):
     types_to_drop = set()
     types_to_keep = set()
 
+    if len(types) == 1:
+        return types
+
     for i1, t1 in enumerate(types):
+        t1_without_revconst = t1.remove_revconst()
         for i2, t2 in enumerate(types):
             if t1 is not t2:
-                if t1.is_copyable_from(t2):
+                if t1_without_revconst.is_copyable_from(t2):
                     types_to_drop.add(t2)
                 if are_bindable(t1, t2, False, False):
                     types_to_keep.add(t1 if i1 > i2 else t2)
@@ -329,6 +336,14 @@ class ObjectType(Type):
             return False
         return True
 
+    def remove_revconst(self):
+        if not self.is_rev_const:
+            return self
+        return ObjectType({
+            property_name: property_type.remove_revconst()
+            for property_name, property_type in self.property_types.items()
+        }, False)
+
     def replace_inferred_types(self, other):
         if not isinstance(other, ObjectType):
             return self
@@ -353,6 +368,11 @@ class ObjectType(Type):
 
     def __repr__(self, *args, **kwargs):
         result = "Object<"
+
+        if self.is_rev_const:
+            result += "R"
+        if self.is_const:
+            result += "C"
 
         property_entries = self.property_types.items()
 

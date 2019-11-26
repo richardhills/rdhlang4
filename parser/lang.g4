@@ -57,11 +57,13 @@ expression
    | expression '(' ')'            # noParameterFunctionInvocation
    | expression '(' expression ')' # singleParameterFunctionInvocation
    | expression '*' expression     # multiplication
+   | expression '/' expression     # division
    | expression '+' expression     # addition
    | expression '%' expression     # modulus
    | expression '>=' expression    # gte
    | expression '<=' expression    # lte
    | expression '==' expression    # equals
+   | expression '!=' expression    # notEquals
    | expression '=' expression     # assignment
    | STRING                        # string
    | NUMBER                        # number
@@ -121,7 +123,7 @@ whileLoop
    ;
 
 ifBlock
-   : 'if' '(' expression ')' '{' functionStub? '}'
+   : 'if' '(' expression ')' '{' functionStub? '}' ('else' '{' functionStub? '}')?
    ;
 
 functionLiteral

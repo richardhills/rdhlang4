@@ -217,7 +217,7 @@ class TestLocalVariables(TestCase):
             "local_initializer": new_object_op({
                 "foo": literal_op(42)
             }),
-            "code": jump_op(prepare_op(literal_op({
+            "code": catch_op("function_stub_finished", jump_op(prepare_op(literal_op({
                 "static": new_object_op({
                     "argument": type_op("Void"),
                     "breaks": new_object_op({
@@ -230,8 +230,8 @@ class TestLocalVariables(TestCase):
                 "local_initializer": new_object_op({
                     "bar": literal_op("hello")
                 }),
-                "code": break_op("return", nop())
-            })), nop())
+                "code": break_op("function_stub_finished", break_op("return", nop()))
+            })), nop()))
         }
 
         self.assertEquals(ast, CORRECT)
@@ -263,7 +263,7 @@ class TestLocalVariables(TestCase):
                     symbolic_dereference_ops(["foo"]),
                     binary_op("addition", symbolic_dereference_ops(["foo"]), literal_op(3))
                 ),
-                jump_op(prepare_op(literal_op({
+                catch_op("function_stub_finished", jump_op(prepare_op(literal_op({
                     "static": new_object_op({
                         "argument": type_op("Void"),
                         "breaks": new_object_op({
@@ -276,8 +276,8 @@ class TestLocalVariables(TestCase):
                     "local_initializer": new_object_op({
                         "bar": literal_op("hello")
                     }),
-                    "code": break_op("return", nop())
-                })), nop())
+                    "code": break_op("function_stub_finished", break_op("return", nop()))
+                })), nop()))
             ])
         }
 

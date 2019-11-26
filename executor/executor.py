@@ -551,13 +551,42 @@ def BinaryOpcode(func, result_type, name):
             rvalue = evaluate(self.rvalue, context)
             if not isinstance(lvalue, int) or not isinstance(rvalue, int):
                 raise self.MISSING_INTEGERS()
+            result = func(lvalue, rvalue)
             raise BreakException(
                 "value",
-                func(lvalue, rvalue)
+                result
             )
 
     return NewOpcode
 
+
+class NotOpcode(Opcode):
+    MISSING_BOOLEAN = TypeErrorFactory("NotOpcode: missing_boolean")
+
+    def __init__(self, data, visitor):
+        super(NotOpcode, self).__init__(data)
+        self.expression = enrich_opcode(self.data["expression"], visitor)
+
+    def get_break_types(self, context):
+        expression_type, expression_break_types = get_expression_break_types(self.expression, context, MISSING)
+        self_break_types = []
+        if not BooleanType().is_copyable_from(expression_type):
+            self_break_types.append({
+                "exception": self.MISSING_BOOLEAN.get_type(),
+            })
+        if expression_type is not MISSING:
+            self_break_types.append({
+                "value": BooleanType()
+            })
+        return merge_break_types(
+            self_break_types + [ expression_break_types ]
+        )
+
+    def jump(self, context):
+        value = evaluate(self.expression, context)
+        if not isinstance(value, bool):
+            raise self.MISSING_BOOLEAN()
+        raise BreakException("value", not value)
 
 class DereferenceOpcode(Opcode):
     INVALID_DEREFERENCE = TypeErrorFactory("DereferenceOpcode: invalid_dereference")
@@ -716,10 +745,12 @@ OPCODES = {
     "context": ContextOpcode,
     "addition": BinaryOpcode(lambda a, b: a + b, IntegerType(), "addition"),
     "multiplication": BinaryOpcode(lambda a, b: a * b, IntegerType(), "multiplication"),
-    "modulus": BinaryOpcode(lambda a, b: a % b, BooleanType(), "modulus"),
+    "division": BinaryOpcode(lambda a, b: a / b, IntegerType(), "division"),
+    "modulus": BinaryOpcode(lambda a, b: a % b, IntegerType(), "modulus"),
     "gte": BinaryOpcode(lambda a, b: a >= b, BooleanType(), "gte"),
-    "lte": BinaryOpcode(lambda a, b: a <= b, BooleanType(), "gte"),
+    "lte": BinaryOpcode(lambda a, b: a <= b, BooleanType(), "lte"),
     "equals": BinaryOpcode(lambda a, b: a == b, BooleanType(), "equals"),
+    "not": NotOpcode,
 }
 
 
@@ -949,7 +980,7 @@ class PreparedFunction(object):
             declared_break_type = self.break_types.get(break_mode, default_break_type)
 
             if isinstance(declared_break_type, InferredType):
-                self.break_types[break_mode] = actual_break_type
+                self.break_types[break_mode] = declared_break_type.replace_inferred_types(actual_break_type).remove_revconst()
                 continue
             if declared_break_type is MISSING:
                 raise PreparationException("Code {} breaks with {}, but nothing declared".format(break_mode, actual_break_type))
@@ -984,8 +1015,8 @@ class PreparedFunction(object):
                 evaluation_context.create_reference(
                     ObjectType({ "outer": self.outer_context_type }, False), False
                 )
-            except CreateReferenceError:
-                raise FatalException()
+            except CreateReferenceError as e:
+                raise FatalException("Failed to create reference on outercontext")
 
             evaluation_context.local = evaluate(self.local_initializer, evaluation_context)
 
@@ -1004,7 +1035,7 @@ class PreparedFunction(object):
             if declared_break_type is MISSING:
                 raise FatalException("Function broke with {} ({}) but this was not declared".format(e.mode, e.value))
             if not declared_break_type.is_copyable_from(create_crystal_type(e.value, True)):
-                raise FatalException()
+                raise FatalException("Function broke with {} ({}) but this could not be copied to {}".format(e.mode, e.value, declared_break_type))
             raise
 
         raise FatalException("Function did not terminate")

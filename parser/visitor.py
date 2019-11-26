@@ -194,6 +194,14 @@ def binary_op(opcode, lvalue, rvalue, ctx=None):
         "rvalue": rvalue
     }, ctx)
 
+def not_op(expression, ctx=None):
+    if not is_expression(expression):
+        raise InvalidCodeError()
+    return add_debugging({
+        "opcode": "not",
+        "expression": expression
+    }, ctx)
+
 
 def assignment_op(dereference, rvalue, ctx=None):
     if not is_expression(dereference) or not is_expression(rvalue):
@@ -397,12 +405,15 @@ class FunctionStub(object):
 
         result["static"] = new_object_op(statics)
 
-        result["code"] = code_expression
-
         if output_mode == "function":
+            result["code"] = code_expression
             return result
         elif output_mode == "expression":
-            return jump_op(prepare_op(literal_op(result)), nop())
+            result["code"] = break_op("function_stub_finished", code_expression)
+            return catch_op(
+                "function_stub_finished",
+                jump_op(prepare_op(literal_op(result)), nop())
+            )
 
 class RDHLang4Visitor(langVisitor):
 
@@ -441,6 +452,12 @@ class RDHLang4Visitor(langVisitor):
         rvalue = self.visit(rvalue)
         return binary_op("multiplication", lvalue, rvalue, ctx if self.debug else None)
 
+    def visitDivision(self, ctx):
+        lvalue, rvalue = ctx.expression()
+        lvalue = self.visit(lvalue)
+        rvalue = self.visit(rvalue)
+        return binary_op("division", lvalue, rvalue, ctx if self.debug else None)
+
     def visitModulus(self, ctx):
         lvalue, rvalue = ctx.expression()
         lvalue = self.visit(lvalue)
@@ -464,6 +481,12 @@ class RDHLang4Visitor(langVisitor):
         lvalue = self.visit(lvalue)
         rvalue = self.visit(rvalue)
         return binary_op("equals", lvalue, rvalue, ctx if self.debug else None)
+
+    def visitNotEquals(self, ctx):
+        lvalue, rvalue = ctx.expression()
+        lvalue = self.visit(lvalue)
+        rvalue = self.visit(rvalue)
+        return not_op(binary_op("equals", lvalue, rvalue, ctx if self.debug else None))
 
     def visitNewObject(self, ctx):
         result = {}
@@ -665,7 +688,7 @@ class RDHLang4Visitor(langVisitor):
         conditional = self.visit(ctx.expression())
 
         function_stub.code_expressions.insert(
-            0, conditional_op(conditional, break_op("loop_break", MISSING), nop(), ctx)
+            0, conditional_op(conditional, nop(), break_op("loop_break", MISSING), ctx)
         )
 
         return catch_op(
@@ -674,13 +697,27 @@ class RDHLang4Visitor(langVisitor):
         )
 
     def visitIfBlock(self, ctx):
-        function_stub = self.visit(ctx.functionStub())
+        blocks = ctx.functionStub()
+
+        if len(blocks) == 1:
+            true_block, false_block = blocks[0], None
+        if len(blocks) == 2:
+            true_block, false_block = blocks
+
+        if true_block:
+            true_block = self.visit(true_block).create("expression")
+        else:
+            true_block = nop()
+        if false_block:
+            false_block = self.visit(false_block).create("expression")
+        else:
+            false_block = nop()
         conditional = self.visit(ctx.expression())
 
         return conditional_op(
             conditional,
-            function_stub.create("expression"),
-            nop(),
+            true_block,
+            false_block,
             ctx
         )
 
