@@ -1,10 +1,9 @@
 from antlr4.CommonTokenStream import CommonTokenStream
 from antlr4.InputStream import InputStream
 
-from langLexer import langLexer
-from langListener import langListener
-from langParser import langParser
-from langVisitor import langVisitor
+from parser.langLexer import langLexer
+from parser.langParser import langParser
+
 
 def main():
     code = """{

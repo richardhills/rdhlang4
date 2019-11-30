@@ -5,11 +5,11 @@ from __future__ import unicode_literals
 from unittest.case import TestCase
 import unittest.main
 
-from exception_types import CreateReferenceError, IncompatableAssignmentError
-from type_system.core_types import merge_types, \
+from rdhlang4.exception_types import CreateReferenceError, IncompatableAssignmentError
+from rdhlang4.type_system.core_types import merge_types, \
     OneOfType, ObjectType, IntegerType, BooleanType, AnyType, UnitType, \
     are_bindable, StringType, ListType, VoidType
-from type_system.values import Object, List
+from rdhlang4.type_system.values import Object, List
 
 
 # Golden rules:

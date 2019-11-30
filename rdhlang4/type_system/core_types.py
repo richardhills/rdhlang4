@@ -5,8 +5,8 @@ from __future__ import unicode_literals
 from __builtin__ import False
 from pickle import FALSE
 
-from exception_types import DataIntegrityError, CrystalValueCanNotBeGenerated
-from utils import MISSING
+from rdhlang4.exception_types import DataIntegrityError, CrystalValueCanNotBeGenerated
+from rdhlang4.utils import MISSING
 
 
 def are_bindable(first, second, first_is_rev_const, second_is_rev_const, ignore_void_types=False):
@@ -356,7 +356,7 @@ class ObjectType(Type):
         }, False)
 
     def get_crystal_value(self):
-        from type_system.values import Object
+        from rdhlang4.type_system.values import Object
         return Object({
             property_name: property_type.get_crystal_value() for property_name, property_type in self.property_types.items()
         })
@@ -458,7 +458,7 @@ class ListType(Type):
         return True
 
     def get_crystal_value(self):
-        from type_system.values import List
+        from rdhlang4.type_system.values import List
         return List([p.get_crystal_value() for p in self.entry_types])
 
 class FunctionType(Type):

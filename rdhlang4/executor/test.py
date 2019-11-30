@@ -2,14 +2,13 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-import json
 from unittest.case import TestCase
 
-from executor.executor import PreparedFunction, PreparationException, \
+from rdhlang4.executor.executor import PreparedFunction, PreparationException, \
     BreakException, JumpOpcode, DynamicDereferenceOpcode, PrepareOpcode, \
     enforce_application_break_mode_constraints
-from parser.rdhparser import parse, prepare_code
-from type_system.core_types import ObjectType, IntegerType, merge_types
+from rdhlang4.parser.rdhparser import parse, prepare_code
+from rdhlang4.type_system.core_types import ObjectType, IntegerType, merge_types
 
 
 class TestExecutor(TestCase):

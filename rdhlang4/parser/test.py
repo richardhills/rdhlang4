@@ -2,16 +2,14 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-import json
 import unittest
 from unittest.case import TestCase
 
-from parser.rdhparser import parse
-from parser.visitor import new_object_op, type_op, object_type, assignment_op, \
+from rdhlang4.parser.rdhparser import parse
+from rdhlang4.parser.visitor import new_object_op, type_op, object_type, assignment_op, \
     symbolic_dereference_ops, literal_op, break_op, jump_op, \
-    prepare_op, merge_op, nop, comma_op, transform_op, function_type, catch_op, \
+    prepare_op, nop, comma_op, transform_op, function_type, catch_op, \
     binary_op
-from utils import MISSING
 
 
 class TestJSONParsing(TestCase):

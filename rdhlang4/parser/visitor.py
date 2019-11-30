@@ -2,10 +2,9 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-from parser.langVisitor import langVisitor
-from utils import spread_dict, MISSING, InternalMarker, default
-from distutils.log import FATAL
-from exception_types import FatalException
+from rdhlang4.parser.langVisitor import langVisitor
+from rdhlang4.utils import spread_dict, MISSING, InternalMarker, default
+from rdhlang4.exception_types import FatalException
 
 
 class ParseError(Exception):

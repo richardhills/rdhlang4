@@ -5,9 +5,9 @@ from __future__ import unicode_literals
 import argparse
 from sys import stdin
 
-from executor.executor import PreparedFunction, BreakException
-from parser.rdhparser import parse
-from exception_types import PreparationException
+from rdhlang4.exception_types import PreparationException
+from rdhlang4.executor.executor import PreparedFunction, BreakException
+from rdhlang4.parser.rdhparser import parse
 
 
 def main():

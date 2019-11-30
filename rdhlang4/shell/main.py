@@ -2,9 +2,9 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-from executor.executor import PreparedFunction
-from parser.rdhparser import parse
-from parser.visitor import function_literal, object_type, new_object_op, \
+from rdhlang4.executor.executor import PreparedFunction
+from rdhlang4.parser.rdhparser import parse
+from rdhlang4.parser.visitor import function_literal, object_type, new_object_op, \
     transform_op, prepare_op, decompose_function, assignment_op, \
     symbolic_dereference_ops, type, literal_op
 

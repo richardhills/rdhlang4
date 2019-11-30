@@ -2,17 +2,16 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-from exception_types import FatalException, PreparationException, \
+from rdhlang4.exception_types import FatalException, PreparationException, \
     IncompatableAssignmentError, CreateReferenceError, \
     InvalidApplicationException, DataIntegrityError, \
     CrystalValueCanNotBeGenerated
-from parser.visitor import nop, context_op, literal_op, type_op
-from type_system.core_types import UnitType, ObjectType, Type, VoidType, \
+from rdhlang4.parser.visitor import nop, context_op, literal_op, type_op
+from rdhlang4.type_system.core_types import UnitType, ObjectType, Type, VoidType, \
     merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
     InferredType, OneOfType, ListType
-from type_system.values import Object, create_crystal_type, List
-from utils import InternalMarker, MISSING, NO_VALUE
-from _collections import defaultdict
+from rdhlang4.type_system.values import Object, create_crystal_type, List
+from rdhlang4.utils import InternalMarker, MISSING, NO_VALUE
 
 
 class BreakException(Exception):

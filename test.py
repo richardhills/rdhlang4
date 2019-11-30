@@ -1,8 +1,8 @@
 import unittest.main
 
-from parser.test import *
-from type_system.test import *
-from executor.test import *
+from rdhlang4.parser.test import *
+from rdhlang4.type_system.test import *
+from rdhlang4.executor.test import *
 
 if __name__ == '__main__':
     unittest.main()

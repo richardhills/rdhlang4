@@ -1,1 +1,4 @@
 antlr4-python2-runtime
+django==1.11
+djangorestframework==3.9.4
+bunch

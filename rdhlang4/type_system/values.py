@@ -6,15 +6,15 @@ import weakref
 
 from bunch import Bunch
 
-from exception_types import DataIntegrityError, IncompatableAssignmentError, \
+from rdhlang4.exception_types import DataIntegrityError, IncompatableAssignmentError, \
     CreateReferenceError
-from type_system.core_types import UnitType, ObjectType, VoidType, AnyType, are_bindable, \
+from rdhlang4.type_system.core_types import UnitType, ObjectType, VoidType, AnyType, are_bindable, \
     are_common_properties_compatible, ListType, are_common_entries_compatible
-from utils import NO_VALUE, MISSING
+from rdhlang4.utils import NO_VALUE, MISSING
 
 
 def create_crystal_type(value, set_is_rev_const, mask_type=None):
-    from executor.executor import PreparedFunction
+    from rdhlang4.executor.executor import PreparedFunction
 
     if not isinstance(mask_type, ObjectType):
         mask_type = None
