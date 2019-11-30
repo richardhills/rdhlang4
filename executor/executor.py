@@ -194,7 +194,7 @@ class PrepareOpcode(Opcode):
 
 
 class JumpOpcode(Opcode):
-    MISSING_FUNCTION = TypeErrorFactory("JumpOpcode: missing function")
+    MISSING_FUNCTION = TypeErrorFactory("JumpOpcode: missing_function")
     INVALID_ARGUMENT = TypeErrorFactory("JumpOpcode: invalid_argument")
     UNKNOWN_BREAK_MODE = TypeErrorFactory("JumpOpcode: unknown_break_mode")
 
@@ -219,6 +219,8 @@ class JumpOpcode(Opcode):
                 "exception": self.MISSING_FUNCTION.get_type()
             }, {
                 "exception": self.INVALID_ARGUMENT.get_type()
+            }, {
+                "exception": self.UNKNOWN_BREAK_MODE.get_type()
             }])
 
             if function_type is not MISSING and argument_type is not MISSING:

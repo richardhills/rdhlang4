@@ -289,6 +289,9 @@ class OneOfType(Type):
             "types": [t.to_dict() for t in self.types]
         }
 
+    def remove_revconst(self):
+        return merge_types([t.remove_revconst() for t in self.types])
+
     def __hash__(self):
         result = 0
         for type in self.types:

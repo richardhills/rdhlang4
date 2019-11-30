@@ -474,6 +474,18 @@ class TestMiscelaneous(TestCase):
         #self.assertNotEquals(function.break_types["exception"]["property_types"]["message"].value, "")
         # Fails with PreparationError at run time which isn't caught at compile time
 
+    def test11(self):
+        return
+        function = prepare_code("""
+            typedef Integer Foo;
+            typedef String Baz;
+            typedef { foo: Integer } Bar;
+            Foo foo = 123;
+            Baz baz = "hello";
+            Bar b = { foo: 123 };
+            return foo;
+        """)
+
 class TestEuler(TestCase):
 #     def testProblem1a(self):
 #         function = prepare_code("""
