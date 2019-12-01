@@ -464,26 +464,34 @@ class TestMiscelaneous(TestCase):
     def test10(self):
         function = prepare_code("""
             bam = function(Void => Integer) {
-                foo =123;
+                foo = 123;
                 bar = foo * 233 + foo;
                 return bar;
             };
             bam();
         """)
-        #self.assertNotEquals(function.break_types["exception"]["property_types"]["message"].value, "")
-        # Fails with PreparationError at run time which isn't caught at compile time
+        expected = merge_types([
+            PrepareOpcode.PREPARATION_ERROR.get_type(),
+            JumpOpcode.INVALID_ARGUMENT.get_type(),
+            JumpOpcode.MISSING_FUNCTION.get_type(),
+            JumpOpcode.UNKNOWN_BREAK_MODE.get_type(),
+            DynamicDereferenceOpcode.INVALID_DEREFERENCE.get_type()
+        ])
+        self.assertTrue(expected.is_copyable_from(function.break_types["exception"]))
+        with self.assertRaises(BreakException):
+            function.invoke()
 
     def test11(self):
-        return
         function = prepare_code("""
             typedef Integer Foo;
             typedef String Baz;
-            typedef { foo: Integer } Bar;
+            typedef Object { Integer foo; } Bar;
             Foo foo = 123;
             Baz baz = "hello";
             Bar b = { foo: 123 };
             return foo;
         """)
+        self.assertEquals(function.invoke(), 123);
 
 class TestEuler(TestCase):
 #     def testProblem1a(self):

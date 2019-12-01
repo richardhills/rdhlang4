@@ -800,6 +800,10 @@ TYPES = {
 
 
 def enrich_type(data):
+    if not isinstance(data, dict):
+        raise PreparationException("Unknown type data {}".format(data))
+    if "type" not in data:
+        raise PreparationException("Missing type in data {}".format(data))
     type_constructor = TYPES.get(data["type"], MISSING)
     if type_constructor is MISSING:
         raise PreparationException("Unknown type {}".format(data["type"]))
