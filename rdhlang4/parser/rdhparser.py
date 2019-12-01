@@ -30,5 +30,6 @@ def parse(code, debug=False):
 def prepare_code(code, debug=False):
     ast = parse(code, debug)
 
-    if ast:
+    if ast and isinstance(ast, dict) and "static" in ast:
         return PreparedFunction(ast)
+    return ast
