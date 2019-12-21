@@ -58,12 +58,12 @@ expression
    | expression '(' ')'            # noParameterFunctionInvocation
    | expression '(' expression ')' # singleParameterFunctionInvocation
    | '(' expression ')'            # parenthesis
+   | '+' expression                # makePositive
+   | '-' expression                # negation
    | expression '*' expression     # multiplication
    | expression '/' expression     # division
    | expression '+' expression     # addition
    | expression '-' expression     # subtraction
-   | '+' expression                # makePositive
-   | '-' expression                # negation
    | expression '%' expression     # modulus
    | expression '>=' expression    # gte
    | expression '<=' expression    # lte
