@@ -271,9 +271,6 @@ class OneOfType(Type):
 
     def __init__(self, types, *args, **kwargs):
         super(OneOfType, self).__init__(*args, **kwargs)
-        if len(types) > 100:
-            import pydevd
-            pydevd.settrace()
         self.types = types
 
     def is_copyable_from(self, other, result_cache):

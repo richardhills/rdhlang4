@@ -18,8 +18,13 @@ class AlwaysFailErrorListener(ConsoleErrorListener):
         super(AlwaysFailErrorListener, self).syntaxError(recognizer, offendingSymbol, line, column, msg, e)
         raise ParseError()
 
+#     def reportAmbiguity(self, recognizer, dfa, startIndex, stopIndex, exact, ambigAlts, configs):
+#         super(AlwaysFailErrorListener, self).reportAmbiguity(recognizer, dfa, startIndex, stopIndex, exact, ambigAlts, configs)
+#         raise ParseError()
+
 def parse(code, debug=False):
     lexer = langLexer(InputStream(code))
+    lexer.addErrorListener(AlwaysFailErrorListener())
     tokens = CommonTokenStream(lexer)
     parser = langParser(tokens)
     parser.addErrorListener(AlwaysFailErrorListener())

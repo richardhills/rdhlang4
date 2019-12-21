@@ -193,6 +193,14 @@ def binary_op(opcode, lvalue, rvalue, ctx=None):
         "rvalue": rvalue
     }, ctx)
 
+def negation_op(expression, ctx=None):
+    if not is_expression(expression):
+        raise InvalidCodeError()
+    return add_debugging({
+        "opcode": "negation",
+        "expression": expression
+    }, ctx)
+
 def not_op(expression, ctx=None):
     if not is_expression(expression):
         raise InvalidCodeError()
@@ -415,6 +423,12 @@ class RDHLang4Visitor(langVisitor):
     def visitNumber(self, ctx):
         return literal_op(int(ctx.NUMBER().getText()), ctx if self.debug else None)
 
+    def visitTrue(self, ctx):
+        return literal_op(True, ctx if self.debug else None)
+
+    def visitFalse(self, ctx):
+        return literal_op(False, ctx if self.debug else None)
+
     def visitToFunctionLiteral(self, ctx):
         return prepare_op(literal_op(self.visit(ctx.functionLiteral()), ctx if self.debug else None), ctx if self.debug else None)
 
@@ -428,11 +442,27 @@ class RDHLang4Visitor(langVisitor):
         argument_expression = self.visit(argument_expression)
         return transform_op(jump_op(function_expression, argument_expression, ctx if self.debug else None), ctx if self.debug else None, "return", "value")
 
+    def visitParenthesis(self, ctx):
+        return self.visit(ctx.expression())
+
     def visitAddition(self, ctx):
         lvalue, rvalue = ctx.expression()
         lvalue = self.visit(lvalue)
         rvalue = self.visit(rvalue)
         return binary_op("addition", lvalue, rvalue, ctx if self.debug else None)
+
+    def visitSubtraction(self, ctx):
+        lvalue, rvalue = ctx.expression()
+        lvalue = self.visit(lvalue)
+        rvalue = self.visit(rvalue)
+        return binary_op("subtraction", lvalue, rvalue, ctx if self.debug else None)
+
+    def visitMakePositive(self, ctx):
+        return self.visit(ctx.expression())
+
+    def visitNegation(self, ctx):
+        value = self.visit(ctx.expression())
+        return negation_op(value, ctx if self.debug else None)
 
     def visitMultiplication(self, ctx):
         lvalue, rvalue = ctx.expression()
@@ -463,6 +493,18 @@ class RDHLang4Visitor(langVisitor):
         lvalue = self.visit(lvalue)
         rvalue = self.visit(rvalue)
         return binary_op("lte", lvalue, rvalue, ctx if self.debug else None)
+
+    def visitGt(self, ctx):
+        lvalue, rvalue = ctx.expression()
+        lvalue = self.visit(lvalue)
+        rvalue = self.visit(rvalue)
+        return binary_op("gt", lvalue, rvalue, ctx if self.debug else None)
+
+    def visitLt(self, ctx):
+        lvalue, rvalue = ctx.expression()
+        lvalue = self.visit(lvalue)
+        rvalue = self.visit(rvalue)
+        return binary_op("lt", lvalue, rvalue, ctx if self.debug else None)
 
     def visitEquals(self, ctx):
         lvalue, rvalue = ctx.expression()
@@ -523,6 +565,9 @@ class RDHLang4Visitor(langVisitor):
             code_expressions.append(break_op("exit", literal_op(0)))
 
         return function_stub.create("function")        
+
+    def visitToLiteral(self, ctx):
+        return self.visit(ctx.literal())
 
     def visitSymbolInitialization(self, ctx):
         return (

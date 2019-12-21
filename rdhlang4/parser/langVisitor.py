@@ -79,6 +79,11 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#negation.
+    def visitNegation(self, ctx:langParser.NegationContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#string.
     def visitString(self, ctx:langParser.StringContext):
         return self.visitChildren(ctx)
@@ -89,8 +94,18 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#lt.
+    def visitLt(self, ctx:langParser.LtContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#toFunctionType.
     def visitToFunctionType(self, ctx:langParser.ToFunctionTypeContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#subtraction.
+    def visitSubtraction(self, ctx:langParser.SubtractionContext):
         return self.visitChildren(ctx)
 
 
@@ -196,6 +211,21 @@ class langVisitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by langParser#toAnyType.
     def visitToAnyType(self, ctx:langParser.ToAnyTypeContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#parenthesis.
+    def visitParenthesis(self, ctx:langParser.ParenthesisContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#makePositive.
+    def visitMakePositive(self, ctx:langParser.MakePositiveContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#gt.
+    def visitGt(self, ctx:langParser.GtContext):
         return self.visitChildren(ctx)
 
 

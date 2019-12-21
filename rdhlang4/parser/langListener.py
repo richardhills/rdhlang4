@@ -134,6 +134,15 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#negation.
+    def enterNegation(self, ctx:langParser.NegationContext):
+        pass
+
+    # Exit a parse tree produced by langParser#negation.
+    def exitNegation(self, ctx:langParser.NegationContext):
+        pass
+
+
     # Enter a parse tree produced by langParser#string.
     def enterString(self, ctx:langParser.StringContext):
         pass
@@ -152,12 +161,30 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#lt.
+    def enterLt(self, ctx:langParser.LtContext):
+        pass
+
+    # Exit a parse tree produced by langParser#lt.
+    def exitLt(self, ctx:langParser.LtContext):
+        pass
+
+
     # Enter a parse tree produced by langParser#toFunctionType.
     def enterToFunctionType(self, ctx:langParser.ToFunctionTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#toFunctionType.
     def exitToFunctionType(self, ctx:langParser.ToFunctionTypeContext):
+        pass
+
+
+    # Enter a parse tree produced by langParser#subtraction.
+    def enterSubtraction(self, ctx:langParser.SubtractionContext):
+        pass
+
+    # Exit a parse tree produced by langParser#subtraction.
+    def exitSubtraction(self, ctx:langParser.SubtractionContext):
         pass
 
 
@@ -347,6 +374,33 @@ class langListener(ParseTreeListener):
 
     # Exit a parse tree produced by langParser#toAnyType.
     def exitToAnyType(self, ctx:langParser.ToAnyTypeContext):
+        pass
+
+
+    # Enter a parse tree produced by langParser#parenthesis.
+    def enterParenthesis(self, ctx:langParser.ParenthesisContext):
+        pass
+
+    # Exit a parse tree produced by langParser#parenthesis.
+    def exitParenthesis(self, ctx:langParser.ParenthesisContext):
+        pass
+
+
+    # Enter a parse tree produced by langParser#makePositive.
+    def enterMakePositive(self, ctx:langParser.MakePositiveContext):
+        pass
+
+    # Exit a parse tree produced by langParser#makePositive.
+    def exitMakePositive(self, ctx:langParser.MakePositiveContext):
+        pass
+
+
+    # Enter a parse tree produced by langParser#gt.
+    def enterGt(self, ctx:langParser.GtContext):
+        pass
+
+    # Exit a parse tree produced by langParser#gt.
+    def exitGt(self, ctx:langParser.GtContext):
         pass
 
 

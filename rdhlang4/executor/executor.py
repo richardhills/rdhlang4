@@ -269,7 +269,8 @@ def jump_to_function(function, argument):
     elif callable(function):
         try:
             result = function(*getattr(argument, "args", []), **getattr(argument, "kwargs", {}))
-        except Exception:
+        except Exception as e:
+            print("Python Exception: {}".format(e.args))
             raise JumpOpcode.PYTHON_EXCEPTION()
         raise BreakException("value", result)
     else:
@@ -575,6 +576,38 @@ def BinaryOpcode(func, result_type, name):
 
     return NewOpcode
 
+class NegationOpcode(Opcode):
+    MISSING_INTEGERS = TypeErrorFactory("negation: missing_integers")
+
+    def __init__(self, data, visitor):
+        super(NegationOpcode, self).__init__(data)
+        self.expression = enrich_opcode(self.data["expression"], visitor)
+
+    def get_break_types(self, context):
+        expression_type, expression_break_types = get_expression_break_types(self.expression, context, MISSING)
+
+        int_type = IntegerType()
+        self_break_types = []
+
+        if expression_type is MISSING or not int_type.is_copyable_from(expression_type, {}):
+            self_break_types.append({
+                "exception": self.MISSING_INTEGERS.get_type()
+            })
+
+        return merge_break_types(self_break_types + [
+            expression_break_types, {
+                "value": int_type
+            }
+        ])
+
+    def jump(self, context):
+        value = evaluate(self.expression, context)
+        if not isinstance(value, int):
+            raise self.MISSING_INTEGERS()
+        raise BreakException(
+            "value",
+            -value
+        )
 
 class NotOpcode(Opcode):
     MISSING_BOOLEAN = TypeErrorFactory("NotOpcode: missing_boolean")
@@ -778,11 +811,15 @@ OPCODES = {
     "import": ImportOpcode,
     "context": ContextOpcode,
     "addition": BinaryOpcode(lambda a, b: a + b, IntegerType(), "addition"),
+    "subtraction": BinaryOpcode(lambda a, b: a - b, IntegerType(), "subtraction"),
+    "negation": NegationOpcode,
     "multiplication": BinaryOpcode(lambda a, b: a * b, IntegerType(), "multiplication"),
     "division": BinaryOpcode(lambda a, b: int(a / b), IntegerType(), "division"),
     "modulus": BinaryOpcode(lambda a, b: a % b, IntegerType(), "modulus"),
     "gte": BinaryOpcode(lambda a, b: a >= b, BooleanType(), "gte"),
     "lte": BinaryOpcode(lambda a, b: a <= b, BooleanType(), "lte"),
+    "gt": BinaryOpcode(lambda a, b: a > b, BooleanType(), "gt"),
+    "lt": BinaryOpcode(lambda a, b: a < b, BooleanType(), "lt"),
     "equals": BinaryOpcode(lambda a, b: a == b, BooleanType(), "equals"),
     "not": NotOpcode,
 }
@@ -917,8 +954,6 @@ class PreparedFunction(object):
 
     def __init__(self, data, outer_context=NO_VALUE):
         if not isinstance(data, dict):
-            import pydevd
-            pydevd.settrace()
             raise PreparationException("data for function is not a dict")
 
         self.data = data

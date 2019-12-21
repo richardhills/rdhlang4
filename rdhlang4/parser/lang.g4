@@ -4,8 +4,8 @@
 grammar lang;
 
 code
-   : literal			# toLiteral
-   | functionStub       # toFunctionStub
+   : literal EOF          # toLiteral
+   | functionStub EOF     # toFunctionStub
    ;
 
 functionStub
@@ -57,12 +57,18 @@ expression
    | SYMBOL                        # unboundDereference
    | expression '(' ')'            # noParameterFunctionInvocation
    | expression '(' expression ')' # singleParameterFunctionInvocation
+   | '(' expression ')'            # parenthesis
    | expression '*' expression     # multiplication
    | expression '/' expression     # division
    | expression '+' expression     # addition
+   | expression '-' expression     # subtraction
+   | '+' expression                # makePositive
+   | '-' expression                # negation
    | expression '%' expression     # modulus
    | expression '>=' expression    # gte
    | expression '<=' expression    # lte
+   | expression '>' expression     # gt
+   | expression '<' expression     # lt
    | expression '==' expression    # equals
    | expression '!=' expression    # notEquals
    | expression '=' expression     # assignment
@@ -177,7 +183,7 @@ fragment SAFECODEPOINT
 
 
 NUMBER
-   : '-'? INT ('.' [0-9] +)? EXP?
+   : INT ('.' [0-9] +)? EXP?
    ;
 
 
