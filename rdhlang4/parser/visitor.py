@@ -40,7 +40,7 @@ def new_object_op(properties, ctx=None):
     if not isinstance(properties, dict):
         raise InvalidCodeError()
     for property, expression in properties.items():
-        if not isinstance(property, basestring):
+        if not isinstance(property, str):
             raise InvalidCodeError()
         if not is_expression(expression):
             raise InvalidCodeError()
@@ -68,7 +68,7 @@ def literal_op(value, ctx=None):
 
 
 def type_op(name, ctx=None, **kwargs):
-    if not isinstance(name, basestring):
+    if not isinstance(name, str):
         raise InvalidCodeError()
     properties = {
         "type": literal_op(name, ctx)
@@ -227,7 +227,7 @@ def dereference_op(reference, of, ctx=None):
 
 
 def unbound_dereference_op(reference, ctx=None):
-    if not isinstance(reference, basestring):
+    if not isinstance(reference, str):
         raise InvalidCodeError()
     return add_debugging({
         "opcode": "unbound_dereference",
@@ -260,24 +260,13 @@ def prepare_op(function_expression, ctx=None):
         "function": function_expression
     }, ctx)
 
-
-class LocalVariableDeclaration(object):
-
-    def __init__(self, type, name, initial_value):
-        self.type = type
-        self.name = name
-        if not is_expression(initial_value):
-            raise InvalidCodeError()
-        self.initial_value = initial_value
-
-
-class StaticValueDeclaration(object):
-
-    def __init__(self, name, value):
-        self.name = name
-        if not is_expression(value):
-            raise InvalidCodeError()
-        self.value = value
+def import_op(name_expression, ctx=None):
+    if not is_expression(name_expression):
+        raise InvalidCodeError()
+    return add_debugging({
+        "opcode": "import",
+        "name": name_expression
+    }, ctx)
 
 
 class FunctionStub(object):
@@ -579,6 +568,21 @@ class RDHLang4Visitor(langVisitor):
         return FunctionStub(
             extra_statics={ name: value },
         ).chain(previous_function)
+
+    def visitImportStatement(self, ctx):
+        previous_function = ctx.functionStub()
+        if previous_function:
+            previous_function = self.visit(previous_function)
+
+        name = ctx.SYMBOL().getText()
+
+        result = FunctionStub(
+            extra_statics={ name: import_op(literal_op(name)) },
+        )
+
+        if previous_function:
+            result = result.chain(previous_function)
+        return result
 
     def visitToExpression(self, ctx):
         code_expressions = [self.visit(e) for e in ctx.expression()]

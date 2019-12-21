@@ -2,6 +2,8 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+import requests
+
 from rdhlang4.exception_types import FatalException, PreparationException, \
     IncompatableAssignmentError, CreateReferenceError, \
     InvalidApplicationException, DataIntegrityError, \
@@ -9,8 +11,9 @@ from rdhlang4.exception_types import FatalException, PreparationException, \
 from rdhlang4.parser.visitor import nop, context_op, literal_op, type_op
 from rdhlang4.type_system.core_types import UnitType, ObjectType, Type, VoidType, \
     merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
-    InferredType, OneOfType, ListType
-from rdhlang4.type_system.values import Object, create_crystal_type, List
+    InferredType, OneOfType, ListType, PythonFunction, RemoveRevConst
+from rdhlang4.type_system.values import Object, List, \
+    get_manager, create_crystal_type
 from rdhlang4.utils import InternalMarker, MISSING, NO_VALUE
 
 
@@ -155,7 +158,7 @@ class PrepareOpcode(Opcode):
         if not self.function_raw_data_type is MISSING:
             try:
                 self.function_data = self.function_raw_data_type.get_crystal_value()
-            except CrystalValueCanNotBeGenerated:
+            except CrystalValueCanNotBeGenerated as e:
                 pass
 
         break_types = [
@@ -196,6 +199,7 @@ class JumpOpcode(Opcode):
     MISSING_FUNCTION = TypeErrorFactory("JumpOpcode: missing_function")
     INVALID_ARGUMENT = TypeErrorFactory("JumpOpcode: invalid_argument")
     UNKNOWN_BREAK_MODE = TypeErrorFactory("JumpOpcode: unknown_break_mode")
+    PYTHON_EXCEPTION = TypeErrorFactory("JumpOpcode: python_exception")
 
     def __init__(self, data, visitor):
         self.function = enrich_opcode(data["function"], visitor)
@@ -209,10 +213,15 @@ class JumpOpcode(Opcode):
 
         if isinstance(function_type, FunctionType) and argument_type is not MISSING:
             break_types.append(function_type.break_types)
-            if not function_type.argument_type.is_copyable_from(argument_type):
+            if not function_type.argument_type.is_copyable_from(argument_type, {}):
                 break_types.append({
                     "exception": self.INVALID_ARGUMENT.get_type()
                 })
+        elif isinstance(function_type, PythonFunction):
+            break_types.append({
+                "exception": self.PYTHON_EXCEPTION.get_type(),
+                "return": AnyType()
+            })
         else:
             break_types.extend([{
                 "exception": self.MISSING_FUNCTION.get_type()
@@ -239,7 +248,7 @@ class JumpOpcode(Opcode):
         try:
             jump_to_function(function, argument)
         except BreakException as e:
-            if isinstance(function_type, FunctionType):
+            if isinstance(function_type, (FunctionType, PythonFunction)):
                 raise
             if e.mode == "return":
                 raise
@@ -249,16 +258,22 @@ class JumpOpcode(Opcode):
 
 
 def jump_to_function(function, argument):
-    if not isinstance(function, PreparedFunction):
+    if isinstance(function, PreparedFunction):
+        try:
+            if argument is NO_VALUE:
+                function.jump()
+            else:
+                function.jump(argument)
+        except InvalidArgumentException:
+            raise JumpOpcode.INVALID_ARGUMENT()
+    elif callable(function):
+        try:
+            result = function(*getattr(argument, "args", []), **getattr(argument, "kwargs", {}))
+        except Exception:
+            raise JumpOpcode.PYTHON_EXCEPTION()
+        raise BreakException("value", result)
+    else:
         raise JumpOpcode.MISSING_FUNCTION()
-
-    try:
-        if argument is NO_VALUE:
-            function.jump()
-        else:
-            function.jump(argument)
-    except InvalidArgumentException:
-        raise JumpOpcode.INVALID_ARGUMENT()
 
     raise FatalException()
 
@@ -296,7 +311,7 @@ class ConditionalOpcode(Opcode):
             self.false_code.get_break_types(context)
         ]
 
-        if not BooleanType().is_copyable_from(condition_type):
+        if not BooleanType().is_copyable_from(condition_type, {}):
             break_types.append({
                 "exception": self.INVALID_CONDITION_VALUE.get_type()
             })
@@ -369,7 +384,7 @@ class AssignmentOpcode(Opcode):
         ]
         if dereference_type is not MISSING and rvalue_type is not MISSING:
             break_types.append({ "value": VoidType() })
-        if not dereference_type.is_copyable_from(rvalue_type):
+        if not dereference_type.is_copyable_from(rvalue_type, {}):
             break_types.append({
                 "exception": self.INVALID_ASSIGNMENT.get_type(),
             })
@@ -387,7 +402,7 @@ class AssignmentOpcode(Opcode):
 
 
 def clone_literal_value(value):
-    if isinstance(value, (int, bool, basestring)):
+    if isinstance(value, (int, bool, str)):
         return value
     if isinstance(value, dict):
         return Object({
@@ -535,7 +550,7 @@ def BinaryOpcode(func, result_type, name):
             int_type = IntegerType()
             self_break_types = []
 
-            if lvalue_type is MISSING or rvalue_type is MISSING or not int_type.is_copyable_from(lvalue_type) or not int_type.is_copyable_from(rvalue_type):
+            if lvalue_type is MISSING or rvalue_type is MISSING or not int_type.is_copyable_from(lvalue_type, {}) or not int_type.is_copyable_from(rvalue_type, {}):
                 self_break_types.append({
                     "exception": self.MISSING_INTEGERS.get_type()
                 })
@@ -571,7 +586,7 @@ class NotOpcode(Opcode):
     def get_break_types(self, context):
         expression_type, expression_break_types = get_expression_break_types(self.expression, context, MISSING)
         self_break_types = []
-        if not BooleanType().is_copyable_from(expression_type):
+        if not BooleanType().is_copyable_from(expression_type, {}):
             self_break_types.append({
                 "exception": self.MISSING_BOOLEAN.get_type(),
             })
@@ -605,7 +620,7 @@ class DereferenceOpcode(Opcode):
         of_type, of_break_types = get_expression_break_types(self.of, context)
         crystal_reference_value = reference_type.get_crystal_value()
 
-        if isinstance(of_type, ObjectType) and isinstance(crystal_reference_value, basestring):
+        if isinstance(of_type, ObjectType) and isinstance(crystal_reference_value, str):
             value_type = of_type.property_types.get(crystal_reference_value)
 
         if value_type is None:
@@ -625,7 +640,7 @@ class DereferenceOpcode(Opcode):
 
         reference = evaluate(self.reference, context)
 
-        if not isinstance(of, Object):
+        if not isinstance(of, object):
             raise self.INVALID_DEREFERENCE()
 
         if not hasattr(of, reference):
@@ -695,21 +710,38 @@ class DynamicDereferenceOpcode(Opcode):
 
         raise BreakException("value", value)
 
+IMPORTABLE_THINGS = {
+    "requests": requests
+}
+
+class ImportOpcode(Opcode):
+    def __init__(self, data, visitor):
+        super(ImportOpcode, self).__init__(data)
+        self.name_expression = enrich_opcode(self.data["name"], visitor)
+
+    def get_break_types(self, context):
+        return { "value": AnyType() }
+
+    def jump(self, context):
+        name = evaluate(self.name_expression, context)
+        thing_to_import = IMPORTABLE_THINGS[name]
+        raise BreakException("value", thing_to_import)
 
 def get_context_type(context):
-    value_type = {}
-    if context is NO_VALUE:
-        return VoidType()
-    if hasattr(context, "types"):
-        if hasattr(context.types, "argument"):
-            value_type["argument"] = context.types.argument
-        if hasattr(context.types, "local"):
-            value_type["local"] = context.types.local
-        if hasattr(context.types, "outer"):
-            value_type["outer"] = context.types.outer
-    value_type["static"] = create_crystal_type(context.static, False)
-    return ObjectType(value_type, False)
-
+    if not hasattr(context, "_context_type"):
+        value_type = {}
+        if context is NO_VALUE:
+            return VoidType()
+        if hasattr(context, "types"):
+            if hasattr(context.types, "argument"):
+                value_type["argument"] = context.types.argument
+            if hasattr(context.types, "local"):
+                value_type["local"] = context.types.local
+            if hasattr(context.types, "outer"):
+                value_type["outer"] = context.types.outer
+        value_type["static"] = create_crystal_type(context.static, set_is_rev_const=False, lazy_object_types=True)
+        context._context_type = ObjectType(value_type, False)
+    return context._context_type
 
 class ContextOpcode(Opcode):
 
@@ -743,10 +775,11 @@ OPCODES = {
     "merge": MergeOpcode,
     "dereference": DereferenceOpcode,
     "dynamic_dereference": DynamicDereferenceOpcode,
+    "import": ImportOpcode,
     "context": ContextOpcode,
     "addition": BinaryOpcode(lambda a, b: a + b, IntegerType(), "addition"),
     "multiplication": BinaryOpcode(lambda a, b: a * b, IntegerType(), "multiplication"),
-    "division": BinaryOpcode(lambda a, b: a / b, IntegerType(), "division"),
+    "division": BinaryOpcode(lambda a, b: int(a / b), IntegerType(), "division"),
     "modulus": BinaryOpcode(lambda a, b: a % b, IntegerType(), "modulus"),
     "gte": BinaryOpcode(lambda a, b: a >= b, BooleanType(), "gte"),
     "lte": BinaryOpcode(lambda a, b: a <= b, BooleanType(), "lte"),
@@ -883,6 +916,11 @@ class PreparedFunction(object):
     DID_NOT_TERMINATE = TypeErrorFactory("PreparedFunction: did_not_terminate")
 
     def __init__(self, data, outer_context=NO_VALUE):
+        if not isinstance(data, dict):
+            import pydevd
+            pydevd.settrace()
+            raise PreparationException("data for function is not a dict")
+
         self.data = data
 
         self.outer_context = outer_context
@@ -926,7 +964,7 @@ class PreparedFunction(object):
         self.local_type = enrich_type(self.static.local).replace_inferred_types(local_initializer_type)
 
         local_initializer_assignment_break_types = {}
-        if not self.local_type.is_copyable_from(local_initializer_type):
+        if not self.local_type.is_copyable_from(local_initializer_type, {}):
             local_initializer_assignment_break_types["exception"] = self.INVALID_LOCAL.get_type()
 
         self.with_argument_and_local_type_context = Object({
@@ -985,19 +1023,18 @@ class PreparedFunction(object):
             declared_break_type = self.break_types.get(break_mode, default_break_type)
 
             if isinstance(declared_break_type, InferredType):
-                self.break_types[break_mode] = declared_break_type.replace_inferred_types(actual_break_type).remove_revconst()
+                self.break_types[break_mode] = declared_break_type.replace_inferred_types(actual_break_type).visit(RemoveRevConst())
                 continue
             if declared_break_type is MISSING:
                 raise PreparationException("Code {} breaks with {}, but nothing declared".format(break_mode, actual_break_type))
-            if not declared_break_type.is_copyable_from(actual_break_type):
+            if not declared_break_type.is_copyable_from(actual_break_type, {}):
                 raise PreparationException("Code {} breaks with {}, but declared {}".format(break_mode, actual_break_type, declared_break_type))
 
-        # Any remaining inferred break types are not thrown by the code
-        for break_mode, declared_break_type in self.break_types.items():
-            if isinstance(declared_break_type, InferredType):
-                del self.break_types[break_mode]
-
-        self.break_types = dict(self.break_types)
+        self.break_types = {
+            break_mode: declared_break_type
+            for break_mode, declared_break_type in self.break_types.items()
+            if not isinstance(declared_break_type, InferredType)
+        }
 
     def get_type(self):
         return FunctionType(self.argument_type, self.break_types)
@@ -1010,23 +1047,23 @@ class PreparedFunction(object):
             evaluation_context.argument = argument
 
             try:
-                evaluation_context.create_reference(
+                get_manager(evaluation_context).create_reference(
                     ObjectType({ "argument": self.argument_type }, False), False
                 )
             except CreateReferenceError:
                 raise InvalidArgumentException()
 
-            try:
-                evaluation_context.create_reference(
-                    ObjectType({ "outer": self.outer_context_type }, False), False
-                )
-            except CreateReferenceError as e:
-                raise FatalException("Failed to create reference on outercontext")
+#             try:
+#                 get_manager(evaluation_context).create_reference(
+#                     ObjectType({ "outer": self.outer_context_type }, False), False
+#                 )
+#             except CreateReferenceError as e:
+#                 raise FatalException("Failed to create reference on outercontext")
 
             evaluation_context.local = evaluate(self.local_initializer, evaluation_context)
 
             try:
-                evaluation_context.create_reference(
+                get_manager(evaluation_context).create_reference(
                     ObjectType({ "local": self.local_type }, False), False
                 )
             except CreateReferenceError:
@@ -1039,7 +1076,7 @@ class PreparedFunction(object):
             declared_break_type = self.break_types.get(e.mode, MISSING)
             if declared_break_type is MISSING:
                 raise FatalException("Function broke with {} ({}) but this was not declared".format(e.mode, e.value))
-            if not declared_break_type.is_copyable_from(create_crystal_type(e.value, True)):
+            if not declared_break_type.is_copyable_from(create_crystal_type(e.value, True), {}):
                 raise FatalException("Function broke with {} ({}) but this could not be copied to {}".format(e.mode, e.value, declared_break_type))
             raise
 
@@ -1057,9 +1094,8 @@ class PreparedFunction(object):
 
 def enforce_application_break_mode_constraints(function):
     exit_break_type = function.break_types.get("exit", None)
-    if exit_break_type and not IntegerType().is_copyable_from(exit_break_type):
+    if exit_break_type and not IntegerType().is_copyable_from(exit_break_type, {}):
         raise InvalidApplicationException("Application exits with {}, when Integer is expected".format(exit_break_type))
-
 
 def execute(ast):
     executor = PreparedFunction(ast)

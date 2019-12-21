@@ -12,6 +12,7 @@ functionStub
    : expression symbolInitialization (',' symbolInitialization)* ';' functionStub? # localVariableDeclaration
    | 'static' symbolInitialization ';' functionStub? # staticValueDeclaration
    | 'typedef' expression SYMBOL ';' functionStub? # typedef
+   | 'import' SYMBOL ';' functionStub? # importStatement
    | (expression ';')+ functionStub? # toExpression
    ;
 
@@ -154,7 +155,7 @@ exitExpression
    ;
 
 SYMBOL
-   : [a-zA-Z] [a-zA-Z0-9]*
+   : [a-zA-Z_] [a-zA-Z0-9_]*
    ;
 
 STRING

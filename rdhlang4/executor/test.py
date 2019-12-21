@@ -2,13 +2,16 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+import unittest
 from unittest.case import TestCase
 
 from rdhlang4.executor.executor import PreparedFunction, PreparationException, \
     BreakException, JumpOpcode, DynamicDereferenceOpcode, PrepareOpcode, \
-    enforce_application_break_mode_constraints
+    enforce_application_break_mode_constraints, OPCODES
 from rdhlang4.parser.rdhparser import parse, prepare_code
-from rdhlang4.type_system.core_types import ObjectType, IntegerType, merge_types
+from rdhlang4.type_system.core_types import ObjectType, IntegerType, merge_types,\
+    RemoveRevConst
+from posix import remove
 
 
 class TestExecutor(TestCase):
@@ -20,13 +23,13 @@ class TestExecutor(TestCase):
                 return 42;
             }
         """)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
     def test_prepare_code(self):
         function = prepare_code("""
             exit 42;
         """)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
 
     def test_return_number(self):
@@ -36,7 +39,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
     def test_invalid_return_type(self):
         ast = parse("""
@@ -54,7 +57,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
     def test_return_local(self):
         ast = parse("""
@@ -64,7 +67,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
     def test_simple_chained_return_local(self):
         ast = parse("""
@@ -76,7 +79,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
 
     def test_complex_chained_return_local(self):
@@ -89,7 +92,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
 
     def test_invalid_assignment(self):
@@ -112,7 +115,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
     def test_outer_context_access(self):
         ast = parse("""
@@ -125,7 +128,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
 
     def test_argument_access(self):
@@ -138,7 +141,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
     def test_object_mutations(self):
         ast = parse("""
@@ -149,7 +152,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
     def test_weak_unchecked_object_mutations(self):
         ast = parse("""
@@ -160,7 +163,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
     def test_weak_checked_object_mutations(self):
         ast = parse("""
@@ -182,7 +185,7 @@ class TestExecutor(TestCase):
         """)
         function = PreparedFunction(ast)
         self.assertTrue(isinstance(function.break_types["exception"], ObjectType))
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
     def test_python_reassignment_code(self):
         ast = parse("""
@@ -194,7 +197,7 @@ class TestExecutor(TestCase):
         """)
         function = PreparedFunction(ast)
         self.assertTrue(isinstance(function.break_types["exception"], ObjectType))
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
     def test_broken_assignment(self):
         ast = parse("""
@@ -216,7 +219,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
  
 
     def test_doubler(self):
@@ -238,7 +241,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 12)
+        self.assertEqual(function.invoke(), 12)
 
     def test_monad(self):
         ast = parse("""
@@ -256,7 +259,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), ((5 ** 2) ** 2) ** 2)
+        self.assertEqual(function.invoke(), ((5 ** 2) ** 2) ** 2)
 
     def test_monad_with_typedef(self):
         ast = parse("""
@@ -278,7 +281,7 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), ((5 ** 2) ** 2) ** 2)
+        self.assertEqual(function.invoke(), ((5 ** 2) ** 2) ** 2)
 
     def test_monad_with_inferred_types(self):
         ast = parse("""
@@ -299,8 +302,8 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.break_types, { "return": IntegerType(), "exit": IntegerType() })
-        self.assertEquals(function.invoke(), ((5 ** 2) ** 2) ** 2)
+        self.assertEqual(function.break_types, { "return": IntegerType(), "exit": IntegerType() })
+        self.assertEqual(function.invoke(), ((5 ** 2) ** 2) ** 2)
 
 class TestExtraStatics(TestCase):
     def test_extra_statics(self):
@@ -311,7 +314,7 @@ class TestExtraStatics(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
     def test_static_type(self):
         ast = parse("""
@@ -322,7 +325,7 @@ class TestExtraStatics(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
     def test_typedef_type(self):
         ast = parse("""
@@ -333,7 +336,7 @@ class TestExtraStatics(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEquals(function.invoke(), 42)
+        self.assertEqual(function.invoke(), 42)
 
 
 
@@ -370,6 +373,24 @@ class TestPreparationErrors(TestCase):
         with self.assertRaises(BreakException) as cm:
             function.invoke()
 
+class TestImport(TestCase):
+    def test_import(self):
+        function = prepare_code("""
+            import requests;
+            var response = requests.get({ kwargs: { url: "https://news.bbc.co.uk/" }});
+            return response.status_code == 200;
+        """)
+
+        expected = merge_types([
+            JumpOpcode.PYTHON_EXCEPTION.get_type().visit(RemoveRevConst()),
+            DynamicDereferenceOpcode.INVALID_DEREFERENCE.get_type().visit(RemoveRevConst()),
+            OPCODES["equals"].MISSING_INTEGERS.get_type().visit(RemoveRevConst())
+        ])
+
+        #self.assertTrue(expected.is_copyable_from(function.break_types["exception"], {}))
+
+        self.assertEqual(function.invoke(), True)
+
 class TestMiscelaneous(TestCase):
     # Tests I've found don't work when playing.
     def test1(self):
@@ -396,7 +417,7 @@ class TestMiscelaneous(TestCase):
             DynamicDereferenceOpcode.INVALID_DEREFERENCE.get_type(),
         ])
 
-        self.assertTrue(expected.is_copyable_from(function.break_types["exception"]))
+        self.assertTrue(expected.is_copyable_from(function.break_types["exception"], {}))
 
         with self.assertRaises(BreakException):
             function.invoke()
@@ -412,7 +433,7 @@ class TestMiscelaneous(TestCase):
             DynamicDereferenceOpcode.INVALID_DEREFERENCE.get_type()
         ])
 
-        self.assertTrue(expected.is_copyable_from(function.break_types["exception"]))
+        self.assertTrue(expected.is_copyable_from(function.break_types["exception"], {}))
 
         with self.assertRaises(BreakException):
             function.invoke()
@@ -428,7 +449,7 @@ class TestMiscelaneous(TestCase):
             DynamicDereferenceOpcode.INVALID_DEREFERENCE.get_type()
         ])
 
-        self.assertTrue(expected.is_copyable_from(function.break_types["exception"]))
+        self.assertTrue(expected.is_copyable_from(function.break_types["exception"], {}))
 
         with self.assertRaises(BreakException):
             function.invoke()
@@ -459,7 +480,7 @@ class TestMiscelaneous(TestCase):
             foo = return foo;
         """)
 
-        self.assertEquals(function.invoke(), "hello")
+        self.assertEqual(function.invoke(), "hello")
 
     def test10(self):
         function = prepare_code("""
@@ -477,7 +498,7 @@ class TestMiscelaneous(TestCase):
             JumpOpcode.UNKNOWN_BREAK_MODE.get_type(),
             DynamicDereferenceOpcode.INVALID_DEREFERENCE.get_type()
         ])
-        self.assertTrue(expected.is_copyable_from(function.break_types["exception"]))
+        self.assertTrue(expected.is_copyable_from(function.break_types["exception"], {}))
         with self.assertRaises(BreakException):
             function.invoke()
 
@@ -491,7 +512,7 @@ class TestMiscelaneous(TestCase):
             Bar b = { foo: 123 };
             return foo;
         """)
-        self.assertEquals(function.invoke(), 123);
+        self.assertEqual(function.invoke(), 123);
 
 class TestEuler(TestCase):
 #     def testProblem1a(self):
@@ -504,14 +525,14 @@ class TestEuler(TestCase):
 #             }
 #             return i;
 #         """)
-#         self.assertEquals(function.invoke(), 233168)
+#         self.assertEqual(function.invoke(), 233168)
 
 
 #     def testProblem1b(self):
 #         function = prepare_code("""
 #             exit sum( [ i for i in range(1000) if i % 3 == 0 and i % 5 == 0 ] );
 #         """)
-#         self.assertEquals(function.invoke(), 233168)
+#         self.assertEqual(function.invoke(), 233168)
 
     def testProblem2(self):
         function = prepare_code("""
@@ -528,7 +549,7 @@ class TestEuler(TestCase):
             exit answer;
         """)
         enforce_application_break_mode_constraints(function)
-        self.assertEquals(function.invoke(), 4613732)
+        self.assertEqual(function.invoke(), 4613732)
 
     def testProblem3(self):
         function = prepare_code("""
@@ -544,4 +565,10 @@ class TestEuler(TestCase):
             exit test;
         """)
         enforce_application_break_mode_constraints(function)
-        self.assertEquals(function.invoke(), 6857)
+        self.assertEqual(function.invoke(), 6857)
+
+
+
+if __name__ == '__main__':
+    unittest.main()
+

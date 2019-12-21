@@ -19,26 +19,26 @@ class TestJSONParsing(TestCase):
         ast = parse("""
             42
         """)
-        self.assertEquals(ast, 42)
+        self.assertEqual(ast, 42)
 
     def test_string(self):
         ast = parse("""
             "hello world"
         """)
-        self.assertEquals(ast, "hello world")
+        self.assertEqual(ast, "hello world")
 
     def test_empty_object(self):
         ast = parse("""
             {}
         """)
-        self.assertEquals(ast, { })        
+        self.assertEqual(ast, { })        
 
     def test_object(self):
         ast = parse("""
             { "foo": "bar" }
         """)
         CORRECT = { "foo": "bar" }
-        self.assertEquals(ast, CORRECT)
+        self.assertEqual(ast, CORRECT)
 
     def test_nested_object(self):
         ast = parse("""
@@ -47,7 +47,7 @@ class TestJSONParsing(TestCase):
             } }
         """)
         CORRECT = { "foo": { "bar": 42 } }
-        self.assertEquals(ast, CORRECT)
+        self.assertEqual(ast, CORRECT)
 
 
 class TestFunctionParsing(TestCase):
@@ -57,7 +57,7 @@ class TestFunctionParsing(TestCase):
         ast = parse("""
             function () nothrow noexit { }
         """)
-        self.assertEquals(
+        self.assertEqual(
             ast,
             {
                 "static": new_object_op({
@@ -90,7 +90,7 @@ class TestFunctionParsing(TestCase):
                 literal_op(42)
             )
         }
-        self.assertEquals(ast, CORRECT)
+        self.assertEqual(ast, CORRECT)
 
     def test_simple_return_function(self):
         ast = parse("""
@@ -108,7 +108,7 @@ class TestFunctionParsing(TestCase):
             "code": break_op("return", literal_op(42))
         }
 
-        self.assertEquals(ast, CORRECT)
+        self.assertEqual(ast, CORRECT)
 
     def test_simple_return_function_with_types(self):
         ast = parse("""
@@ -126,7 +126,7 @@ class TestFunctionParsing(TestCase):
             "code": break_op("return", literal_op(42))
         }
 
-        self.assertEquals(ast, CORRECT)
+        self.assertEqual(ast, CORRECT)
 
     def test_addition(self):
         ast = parse("""
@@ -144,7 +144,7 @@ class TestFunctionParsing(TestCase):
             "code": binary_op("addition", literal_op(4), literal_op(38))
         }
 
-        self.assertEquals(ast, CORRECT)
+        self.assertEqual(ast, CORRECT)
 
 
 class TestLocalVariables(TestCase):
@@ -169,7 +169,7 @@ class TestLocalVariables(TestCase):
             }),
             "code": break_op("return", nop())
         }
-        self.assertEquals(ast, CORRECT)
+        self.assertEqual(ast, CORRECT)
 
     def test_return_basic_variable(self):
         ast = parse("""
@@ -193,7 +193,7 @@ class TestLocalVariables(TestCase):
                 "foo": literal_op(42)
             })
         }
-        self.assertEquals(ast, CORRECT)
+        self.assertEqual(ast, CORRECT)
 
     def test_2_local_variables(self):
         ast = parse("""
@@ -232,7 +232,7 @@ class TestLocalVariables(TestCase):
             })), nop()))
         }
 
-        self.assertEquals(ast, CORRECT)
+        self.assertEqual(ast, CORRECT)
 
 
     def test_2_local_variables_with_mutation(self):
@@ -279,7 +279,7 @@ class TestLocalVariables(TestCase):
             ])
         }
 
-        self.assertEquals(ast, CORRECT)
+        self.assertEqual(ast, CORRECT)
 
 class TestObjectTypes(TestCase):
     def test_basic_object(self):
@@ -307,7 +307,7 @@ class TestObjectTypes(TestCase):
             }),
             "code": break_op("return", nop())
         }
-        self.assertEquals(ast, CORRECT)
+        self.assertEqual(ast, CORRECT)
 
 class TestExtraStatic(TestCase):
     def test_extra_statics(self):
@@ -327,7 +327,7 @@ class TestExtraStatic(TestCase):
             "local_initializer": new_object_op({}),
             "code": transform_op(symbolic_dereference_ops(["foo"]), input="value", output="return")
         }
-        self.assertEquals(ast, CORRECT)
+        self.assertEqual(ast, CORRECT)
 
 class TestNestedFunctions(TestCase):
 
@@ -370,7 +370,7 @@ class TestNestedFunctions(TestCase):
                     catch_op("return", jump_op(symbolic_dereference_ops(["foo"]), nop()))
                 )
         }
-        self.assertEquals(ast, CORRECT)
+        self.assertEqual(ast, CORRECT)
 
 
 

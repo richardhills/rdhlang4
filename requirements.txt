@@ -1,2 +1,2 @@
-antlr4-python2-runtime
-bunch
+antlr4-python3-runtime
+munch

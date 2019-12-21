@@ -1,555 +1,568 @@
 # Generated from lang.g4 by ANTLR 4.7.2
 from antlr4 import *
+if __name__ is not None and "." in __name__:
+    from .langParser import langParser
+else:
+    from langParser import langParser
 
 # This class defines a complete listener for a parse tree produced by langParser.
 class langListener(ParseTreeListener):
 
     # Enter a parse tree produced by langParser#toLiteral.
-    def enterToLiteral(self, ctx):
+    def enterToLiteral(self, ctx:langParser.ToLiteralContext):
         pass
 
     # Exit a parse tree produced by langParser#toLiteral.
-    def exitToLiteral(self, ctx):
+    def exitToLiteral(self, ctx:langParser.ToLiteralContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toFunctionStub.
-    def enterToFunctionStub(self, ctx):
+    def enterToFunctionStub(self, ctx:langParser.ToFunctionStubContext):
         pass
 
     # Exit a parse tree produced by langParser#toFunctionStub.
-    def exitToFunctionStub(self, ctx):
+    def exitToFunctionStub(self, ctx:langParser.ToFunctionStubContext):
         pass
 
 
     # Enter a parse tree produced by langParser#localVariableDeclaration.
-    def enterLocalVariableDeclaration(self, ctx):
+    def enterLocalVariableDeclaration(self, ctx:langParser.LocalVariableDeclarationContext):
         pass
 
     # Exit a parse tree produced by langParser#localVariableDeclaration.
-    def exitLocalVariableDeclaration(self, ctx):
+    def exitLocalVariableDeclaration(self, ctx:langParser.LocalVariableDeclarationContext):
         pass
 
 
     # Enter a parse tree produced by langParser#staticValueDeclaration.
-    def enterStaticValueDeclaration(self, ctx):
+    def enterStaticValueDeclaration(self, ctx:langParser.StaticValueDeclarationContext):
         pass
 
     # Exit a parse tree produced by langParser#staticValueDeclaration.
-    def exitStaticValueDeclaration(self, ctx):
+    def exitStaticValueDeclaration(self, ctx:langParser.StaticValueDeclarationContext):
         pass
 
 
     # Enter a parse tree produced by langParser#typedef.
-    def enterTypedef(self, ctx):
+    def enterTypedef(self, ctx:langParser.TypedefContext):
         pass
 
     # Exit a parse tree produced by langParser#typedef.
-    def exitTypedef(self, ctx):
+    def exitTypedef(self, ctx:langParser.TypedefContext):
+        pass
+
+
+    # Enter a parse tree produced by langParser#importStatement.
+    def enterImportStatement(self, ctx:langParser.ImportStatementContext):
+        pass
+
+    # Exit a parse tree produced by langParser#importStatement.
+    def exitImportStatement(self, ctx:langParser.ImportStatementContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toExpression.
-    def enterToExpression(self, ctx):
+    def enterToExpression(self, ctx:langParser.ToExpressionContext):
         pass
 
     # Exit a parse tree produced by langParser#toExpression.
-    def exitToExpression(self, ctx):
+    def exitToExpression(self, ctx:langParser.ToExpressionContext):
         pass
 
 
     # Enter a parse tree produced by langParser#symbolInitialization.
-    def enterSymbolInitialization(self, ctx):
+    def enterSymbolInitialization(self, ctx:langParser.SymbolInitializationContext):
         pass
 
     # Exit a parse tree produced by langParser#symbolInitialization.
-    def exitSymbolInitialization(self, ctx):
+    def exitSymbolInitialization(self, ctx:langParser.SymbolInitializationContext):
         pass
 
 
     # Enter a parse tree produced by langParser#newObject.
-    def enterNewObject(self, ctx):
+    def enterNewObject(self, ctx:langParser.NewObjectContext):
         pass
 
     # Exit a parse tree produced by langParser#newObject.
-    def exitNewObject(self, ctx):
+    def exitNewObject(self, ctx:langParser.NewObjectContext):
         pass
 
 
     # Enter a parse tree produced by langParser#pair.
-    def enterPair(self, ctx):
+    def enterPair(self, ctx:langParser.PairContext):
         pass
 
     # Exit a parse tree produced by langParser#pair.
-    def exitPair(self, ctx):
+    def exitPair(self, ctx:langParser.PairContext):
         pass
 
 
     # Enter a parse tree produced by langParser#literal.
-    def enterLiteral(self, ctx):
+    def enterLiteral(self, ctx:langParser.LiteralContext):
         pass
 
     # Exit a parse tree produced by langParser#literal.
-    def exitLiteral(self, ctx):
+    def exitLiteral(self, ctx:langParser.LiteralContext):
         pass
 
 
     # Enter a parse tree produced by langParser#objectLiteral.
-    def enterObjectLiteral(self, ctx):
+    def enterObjectLiteral(self, ctx:langParser.ObjectLiteralContext):
         pass
 
     # Exit a parse tree produced by langParser#objectLiteral.
-    def exitObjectLiteral(self, ctx):
+    def exitObjectLiteral(self, ctx:langParser.ObjectLiteralContext):
         pass
 
 
     # Enter a parse tree produced by langParser#literalPair.
-    def enterLiteralPair(self, ctx):
+    def enterLiteralPair(self, ctx:langParser.LiteralPairContext):
         pass
 
     # Exit a parse tree produced by langParser#literalPair.
-    def exitLiteralPair(self, ctx):
+    def exitLiteralPair(self, ctx:langParser.LiteralPairContext):
         pass
 
 
     # Enter a parse tree produced by langParser#array.
-    def enterArray(self, ctx):
+    def enterArray(self, ctx:langParser.ArrayContext):
         pass
 
     # Exit a parse tree produced by langParser#array.
-    def exitArray(self, ctx):
+    def exitArray(self, ctx:langParser.ArrayContext):
         pass
 
 
     # Enter a parse tree produced by langParser#string.
-    def enterString(self, ctx):
+    def enterString(self, ctx:langParser.StringContext):
         pass
 
     # Exit a parse tree produced by langParser#string.
-    def exitString(self, ctx):
+    def exitString(self, ctx:langParser.StringContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toExitExpression.
-    def enterToExitExpression(self, ctx):
+    def enterToExitExpression(self, ctx:langParser.ToExitExpressionContext):
         pass
 
     # Exit a parse tree produced by langParser#toExitExpression.
-    def exitToExitExpression(self, ctx):
+    def exitToExitExpression(self, ctx:langParser.ToExitExpressionContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toFunctionType.
-    def enterToFunctionType(self, ctx):
+    def enterToFunctionType(self, ctx:langParser.ToFunctionTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#toFunctionType.
-    def exitToFunctionType(self, ctx):
+    def exitToFunctionType(self, ctx:langParser.ToFunctionTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toVoidType.
-    def enterToVoidType(self, ctx):
+    def enterToVoidType(self, ctx:langParser.ToVoidTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#toVoidType.
-    def exitToVoidType(self, ctx):
+    def exitToVoidType(self, ctx:langParser.ToVoidTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toIf.
-    def enterToIf(self, ctx):
+    def enterToIf(self, ctx:langParser.ToIfContext):
         pass
 
     # Exit a parse tree produced by langParser#toIf.
-    def exitToIf(self, ctx):
+    def exitToIf(self, ctx:langParser.ToIfContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toNewObject.
-    def enterToNewObject(self, ctx):
+    def enterToNewObject(self, ctx:langParser.ToNewObjectContext):
         pass
 
     # Exit a parse tree produced by langParser#toNewObject.
-    def exitToNewObject(self, ctx):
+    def exitToNewObject(self, ctx:langParser.ToNewObjectContext):
         pass
 
 
     # Enter a parse tree produced by langParser#division.
-    def enterDivision(self, ctx):
+    def enterDivision(self, ctx:langParser.DivisionContext):
         pass
 
     # Exit a parse tree produced by langParser#division.
-    def exitDivision(self, ctx):
+    def exitDivision(self, ctx:langParser.DivisionContext):
         pass
 
 
     # Enter a parse tree produced by langParser#boundDereference.
-    def enterBoundDereference(self, ctx):
+    def enterBoundDereference(self, ctx:langParser.BoundDereferenceContext):
         pass
 
     # Exit a parse tree produced by langParser#boundDereference.
-    def exitBoundDereference(self, ctx):
+    def exitBoundDereference(self, ctx:langParser.BoundDereferenceContext):
         pass
 
 
     # Enter a parse tree produced by langParser#number.
-    def enterNumber(self, ctx):
+    def enterNumber(self, ctx:langParser.NumberContext):
         pass
 
     # Exit a parse tree produced by langParser#number.
-    def exitNumber(self, ctx):
+    def exitNumber(self, ctx:langParser.NumberContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toWhileLoop.
-    def enterToWhileLoop(self, ctx):
+    def enterToWhileLoop(self, ctx:langParser.ToWhileLoopContext):
         pass
 
     # Exit a parse tree produced by langParser#toWhileLoop.
-    def exitToWhileLoop(self, ctx):
+    def exitToWhileLoop(self, ctx:langParser.ToWhileLoopContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toArray.
-    def enterToArray(self, ctx):
+    def enterToArray(self, ctx:langParser.ToArrayContext):
         pass
 
     # Exit a parse tree produced by langParser#toArray.
-    def exitToArray(self, ctx):
+    def exitToArray(self, ctx:langParser.ToArrayContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toReturnExpression.
-    def enterToReturnExpression(self, ctx):
+    def enterToReturnExpression(self, ctx:langParser.ToReturnExpressionContext):
         pass
 
     # Exit a parse tree produced by langParser#toReturnExpression.
-    def exitToReturnExpression(self, ctx):
+    def exitToReturnExpression(self, ctx:langParser.ToReturnExpressionContext):
         pass
 
 
     # Enter a parse tree produced by langParser#gte.
-    def enterGte(self, ctx):
+    def enterGte(self, ctx:langParser.GteContext):
         pass
 
     # Exit a parse tree produced by langParser#gte.
-    def exitGte(self, ctx):
+    def exitGte(self, ctx:langParser.GteContext):
         pass
 
 
     # Enter a parse tree produced by langParser#multiplication.
-    def enterMultiplication(self, ctx):
+    def enterMultiplication(self, ctx:langParser.MultiplicationContext):
         pass
 
     # Exit a parse tree produced by langParser#multiplication.
-    def exitMultiplication(self, ctx):
+    def exitMultiplication(self, ctx:langParser.MultiplicationContext):
         pass
 
 
     # Enter a parse tree produced by langParser#lte.
-    def enterLte(self, ctx):
+    def enterLte(self, ctx:langParser.LteContext):
         pass
 
     # Exit a parse tree produced by langParser#lte.
-    def exitLte(self, ctx):
+    def exitLte(self, ctx:langParser.LteContext):
         pass
 
 
     # Enter a parse tree produced by langParser#modulus.
-    def enterModulus(self, ctx):
+    def enterModulus(self, ctx:langParser.ModulusContext):
         pass
 
     # Exit a parse tree produced by langParser#modulus.
-    def exitModulus(self, ctx):
+    def exitModulus(self, ctx:langParser.ModulusContext):
         pass
 
 
     # Enter a parse tree produced by langParser#addition.
-    def enterAddition(self, ctx):
+    def enterAddition(self, ctx:langParser.AdditionContext):
         pass
 
     # Exit a parse tree produced by langParser#addition.
-    def exitAddition(self, ctx):
+    def exitAddition(self, ctx:langParser.AdditionContext):
         pass
 
 
     # Enter a parse tree produced by langParser#noParameterFunctionInvocation.
-    def enterNoParameterFunctionInvocation(self, ctx):
+    def enterNoParameterFunctionInvocation(self, ctx:langParser.NoParameterFunctionInvocationContext):
         pass
 
     # Exit a parse tree produced by langParser#noParameterFunctionInvocation.
-    def exitNoParameterFunctionInvocation(self, ctx):
+    def exitNoParameterFunctionInvocation(self, ctx:langParser.NoParameterFunctionInvocationContext):
         pass
 
 
     # Enter a parse tree produced by langParser#unboundDereference.
-    def enterUnboundDereference(self, ctx):
+    def enterUnboundDereference(self, ctx:langParser.UnboundDereferenceContext):
         pass
 
     # Exit a parse tree produced by langParser#unboundDereference.
-    def exitUnboundDereference(self, ctx):
+    def exitUnboundDereference(self, ctx:langParser.UnboundDereferenceContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toObjectType.
-    def enterToObjectType(self, ctx):
+    def enterToObjectType(self, ctx:langParser.ToObjectTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#toObjectType.
-    def exitToObjectType(self, ctx):
+    def exitToObjectType(self, ctx:langParser.ToObjectTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toFunctionLiteral.
-    def enterToFunctionLiteral(self, ctx):
+    def enterToFunctionLiteral(self, ctx:langParser.ToFunctionLiteralContext):
         pass
 
     # Exit a parse tree produced by langParser#toFunctionLiteral.
-    def exitToFunctionLiteral(self, ctx):
+    def exitToFunctionLiteral(self, ctx:langParser.ToFunctionLiteralContext):
         pass
 
 
     # Enter a parse tree produced by langParser#assignment.
-    def enterAssignment(self, ctx):
+    def enterAssignment(self, ctx:langParser.AssignmentContext):
         pass
 
     # Exit a parse tree produced by langParser#assignment.
-    def exitAssignment(self, ctx):
+    def exitAssignment(self, ctx:langParser.AssignmentContext):
         pass
 
 
     # Enter a parse tree produced by langParser#false.
-    def enterFalse(self, ctx):
+    def enterFalse(self, ctx:langParser.FalseContext):
         pass
 
     # Exit a parse tree produced by langParser#false.
-    def exitFalse(self, ctx):
+    def exitFalse(self, ctx:langParser.FalseContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toAnyType.
-    def enterToAnyType(self, ctx):
+    def enterToAnyType(self, ctx:langParser.ToAnyTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#toAnyType.
-    def exitToAnyType(self, ctx):
+    def exitToAnyType(self, ctx:langParser.ToAnyTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toStringType.
-    def enterToStringType(self, ctx):
+    def enterToStringType(self, ctx:langParser.ToStringTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#toStringType.
-    def exitToStringType(self, ctx):
+    def exitToStringType(self, ctx:langParser.ToStringTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toIntegerType.
-    def enterToIntegerType(self, ctx):
+    def enterToIntegerType(self, ctx:langParser.ToIntegerTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#toIntegerType.
-    def exitToIntegerType(self, ctx):
+    def exitToIntegerType(self, ctx:langParser.ToIntegerTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#singleParameterFunctionInvocation.
-    def enterSingleParameterFunctionInvocation(self, ctx):
+    def enterSingleParameterFunctionInvocation(self, ctx:langParser.SingleParameterFunctionInvocationContext):
         pass
 
     # Exit a parse tree produced by langParser#singleParameterFunctionInvocation.
-    def exitSingleParameterFunctionInvocation(self, ctx):
+    def exitSingleParameterFunctionInvocation(self, ctx:langParser.SingleParameterFunctionInvocationContext):
         pass
 
 
     # Enter a parse tree produced by langParser#null.
-    def enterNull(self, ctx):
+    def enterNull(self, ctx:langParser.NullContext):
         pass
 
     # Exit a parse tree produced by langParser#null.
-    def exitNull(self, ctx):
+    def exitNull(self, ctx:langParser.NullContext):
         pass
 
 
     # Enter a parse tree produced by langParser#toInferredType.
-    def enterToInferredType(self, ctx):
+    def enterToInferredType(self, ctx:langParser.ToInferredTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#toInferredType.
-    def exitToInferredType(self, ctx):
+    def exitToInferredType(self, ctx:langParser.ToInferredTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#equals.
-    def enterEquals(self, ctx):
+    def enterEquals(self, ctx:langParser.EqualsContext):
         pass
 
     # Exit a parse tree produced by langParser#equals.
-    def exitEquals(self, ctx):
+    def exitEquals(self, ctx:langParser.EqualsContext):
         pass
 
 
     # Enter a parse tree produced by langParser#true.
-    def enterTrue(self, ctx):
+    def enterTrue(self, ctx:langParser.TrueContext):
         pass
 
     # Exit a parse tree produced by langParser#true.
-    def exitTrue(self, ctx):
+    def exitTrue(self, ctx:langParser.TrueContext):
         pass
 
 
     # Enter a parse tree produced by langParser#notEquals.
-    def enterNotEquals(self, ctx):
+    def enterNotEquals(self, ctx:langParser.NotEqualsContext):
         pass
 
     # Exit a parse tree produced by langParser#notEquals.
-    def exitNotEquals(self, ctx):
+    def exitNotEquals(self, ctx:langParser.NotEqualsContext):
         pass
 
 
     # Enter a parse tree produced by langParser#voidType.
-    def enterVoidType(self, ctx):
+    def enterVoidType(self, ctx:langParser.VoidTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#voidType.
-    def exitVoidType(self, ctx):
+    def exitVoidType(self, ctx:langParser.VoidTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#inferredType.
-    def enterInferredType(self, ctx):
+    def enterInferredType(self, ctx:langParser.InferredTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#inferredType.
-    def exitInferredType(self, ctx):
+    def exitInferredType(self, ctx:langParser.InferredTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#integerType.
-    def enterIntegerType(self, ctx):
+    def enterIntegerType(self, ctx:langParser.IntegerTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#integerType.
-    def exitIntegerType(self, ctx):
+    def exitIntegerType(self, ctx:langParser.IntegerTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#stringType.
-    def enterStringType(self, ctx):
+    def enterStringType(self, ctx:langParser.StringTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#stringType.
-    def exitStringType(self, ctx):
+    def exitStringType(self, ctx:langParser.StringTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#functionType.
-    def enterFunctionType(self, ctx):
+    def enterFunctionType(self, ctx:langParser.FunctionTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#functionType.
-    def exitFunctionType(self, ctx):
+    def exitFunctionType(self, ctx:langParser.FunctionTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#objectType.
-    def enterObjectType(self, ctx):
+    def enterObjectType(self, ctx:langParser.ObjectTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#objectType.
-    def exitObjectType(self, ctx):
+    def exitObjectType(self, ctx:langParser.ObjectTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#anyType.
-    def enterAnyType(self, ctx):
+    def enterAnyType(self, ctx:langParser.AnyTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#anyType.
-    def exitAnyType(self, ctx):
+    def exitAnyType(self, ctx:langParser.AnyTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#propertyType.
-    def enterPropertyType(self, ctx):
+    def enterPropertyType(self, ctx:langParser.PropertyTypeContext):
         pass
 
     # Exit a parse tree produced by langParser#propertyType.
-    def exitPropertyType(self, ctx):
+    def exitPropertyType(self, ctx:langParser.PropertyTypeContext):
         pass
 
 
     # Enter a parse tree produced by langParser#whileLoop.
-    def enterWhileLoop(self, ctx):
+    def enterWhileLoop(self, ctx:langParser.WhileLoopContext):
         pass
 
     # Exit a parse tree produced by langParser#whileLoop.
-    def exitWhileLoop(self, ctx):
+    def exitWhileLoop(self, ctx:langParser.WhileLoopContext):
         pass
 
 
     # Enter a parse tree produced by langParser#ifBlock.
-    def enterIfBlock(self, ctx):
+    def enterIfBlock(self, ctx:langParser.IfBlockContext):
         pass
 
     # Exit a parse tree produced by langParser#ifBlock.
-    def exitIfBlock(self, ctx):
+    def exitIfBlock(self, ctx:langParser.IfBlockContext):
         pass
 
 
     # Enter a parse tree produced by langParser#functionLiteral.
-    def enterFunctionLiteral(self, ctx):
+    def enterFunctionLiteral(self, ctx:langParser.FunctionLiteralContext):
         pass
 
     # Exit a parse tree produced by langParser#functionLiteral.
-    def exitFunctionLiteral(self, ctx):
+    def exitFunctionLiteral(self, ctx:langParser.FunctionLiteralContext):
         pass
 
 
     # Enter a parse tree produced by langParser#functionArgumentAndReturns.
-    def enterFunctionArgumentAndReturns(self, ctx):
+    def enterFunctionArgumentAndReturns(self, ctx:langParser.FunctionArgumentAndReturnsContext):
         pass
 
     # Exit a parse tree produced by langParser#functionArgumentAndReturns.
-    def exitFunctionArgumentAndReturns(self, ctx):
+    def exitFunctionArgumentAndReturns(self, ctx:langParser.FunctionArgumentAndReturnsContext):
         pass
 
 
     # Enter a parse tree produced by langParser#functionThrows.
-    def enterFunctionThrows(self, ctx):
+    def enterFunctionThrows(self, ctx:langParser.FunctionThrowsContext):
         pass
 
     # Exit a parse tree produced by langParser#functionThrows.
-    def exitFunctionThrows(self, ctx):
+    def exitFunctionThrows(self, ctx:langParser.FunctionThrowsContext):
         pass
 
 
     # Enter a parse tree produced by langParser#functionExits.
-    def enterFunctionExits(self, ctx):
+    def enterFunctionExits(self, ctx:langParser.FunctionExitsContext):
         pass
 
     # Exit a parse tree produced by langParser#functionExits.
-    def exitFunctionExits(self, ctx):
+    def exitFunctionExits(self, ctx:langParser.FunctionExitsContext):
         pass
 
 
     # Enter a parse tree produced by langParser#returnExpression.
-    def enterReturnExpression(self, ctx):
+    def enterReturnExpression(self, ctx:langParser.ReturnExpressionContext):
         pass
 
     # Exit a parse tree produced by langParser#returnExpression.
-    def exitReturnExpression(self, ctx):
+    def exitReturnExpression(self, ctx:langParser.ReturnExpressionContext):
         pass
 
 
     # Enter a parse tree produced by langParser#exitExpression.
-    def enterExitExpression(self, ctx):
+    def enterExitExpression(self, ctx:langParser.ExitExpressionContext):
         pass
 
     # Exit a parse tree produced by langParser#exitExpression.
-    def exitExitExpression(self, ctx):
+    def exitExitExpression(self, ctx:langParser.ExitExpressionContext):
         pass
 
 
