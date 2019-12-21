@@ -329,14 +329,14 @@ class TestCrystalTypes(TestCase):
         crystal_type = create_crystal_type(foo, False, None, False)
         expected = ObjectType({ "bar": UnitType(123) }, False)
 
-        self.assertEqual(crystal_type, expected)
+        self.assertTrue(are_bindable(crystal_type, expected, False, False, {}))
 
     def test_create_nested_crystal_type(self):
         foo = munchify({ "bar": { "foo": 123 } })
         crystal_type = create_crystal_type(foo, False, None, False)
         expected = ObjectType({ "bar": ObjectType({ "foo": UnitType(123) }, False) }, False)
 
-        self.assertEqual(crystal_type, expected)
+        self.assertTrue(are_bindable(crystal_type, expected, False, False, {}))
 
     def test_create_recursive_crystal_type(self):
         foo = munchify({ "bar": { } })
@@ -348,7 +348,7 @@ class TestCrystalTypes(TestCase):
 
         expected = Foo
 
-        self.assertEqual(crystal_type, expected)
+        self.assertTrue(are_bindable(crystal_type, expected, False, False, {}))
 
 class TestCompileTimeListChecks(TestCase):
     maxDiff = 65536
@@ -465,81 +465,129 @@ class TestCompileTimeUnitTypeChecks(TestCase):
 
 class TestCompileTimeOneOfTypeChecks(TestCase):
     def test_unitary_one_of_type(self):
-        self.assertEqual(
-            merge_types([ IntegerType(), IntegerType() ]),
-            IntegerType()
+        self.assertTrue(
+            are_bindable(
+                merge_types([ IntegerType(), IntegerType() ]),
+                IntegerType(),
+                False, False, {}
+            )
         )
 
     def test_merge_unit_types(self):
-        self.assertEqual(
-            merge_types([ UnitType(5), UnitType(5) ]),
-            UnitType(5)
+        self.assertTrue(
+            are_bindable(
+                merge_types([ UnitType(5), UnitType(5) ]),
+                UnitType(5),
+                False, False, {}
+            )
         )
 
     def test_merge_unit_and_broader_types(self):
-        self.assertEqual(
-            merge_types([ UnitType(5), IntegerType() ]),
-            IntegerType()
+        self.assertTrue(
+            are_bindable(
+                merge_types([ UnitType(5), IntegerType() ]),
+                IntegerType(),
+                False, False, {}
+            )
         )
 
     def test_merge_integer_and_broader_types(self):
-        self.assertEqual(
-            merge_types([ IntegerType(), AnyType() ]),
-            AnyType()
+        self.assertTrue(
+            are_bindable(
+                merge_types([ IntegerType(), AnyType() ]),
+                AnyType(),
+                False, False, {}
+            )
         )
 
     def test_merge_different_unit_types(self):
-        self.assertEqual(
-            merge_types([ UnitType(5), UnitType(10), UnitType(15) ]),
-            OneOfType([ UnitType(5), UnitType(10), UnitType(15) ])
+        self.assertTrue(
+            are_bindable(
+                merge_types([ UnitType(5), UnitType(10), UnitType(15) ]),
+                OneOfType([ UnitType(5), UnitType(10), UnitType(15) ]),
+                False, False, {}
+            )
         )
 
     def test_subsume_unit_types(self):
-        self.assertEqual(
-            merge_types([ UnitType(5), UnitType(10), UnitType(15), UnitType(20), IntegerType() ]),
-            IntegerType()
+        self.assertTrue(
+            are_bindable(
+                merge_types([ UnitType(5), UnitType(10), UnitType(15), UnitType(20), IntegerType() ]),
+                IntegerType(),
+                False, False, {}
+            )
         )
 
     def test_combine_identical_object_types(self):
-        self.assertEqual(
-            merge_types([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "foo": IntegerType() }, False) ]),
-            ObjectType({ "foo": IntegerType() }, False)
+        self.assertTrue(
+            are_bindable(
+                merge_types([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "foo": IntegerType() }, False) ]),
+                ObjectType({ "foo": IntegerType() }, False),
+                False, False, {}
+            )
         )
 
     def test_combine_different_property_object_types(self):
-        self.assertEqual(
-            merge_types([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "bar": IntegerType() }, False) ]),
-            OneOfType([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "bar": IntegerType() }, False) ])
+        self.assertTrue(
+            are_bindable(
+                merge_types([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "bar": IntegerType() }, False) ]),
+                OneOfType([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "bar": IntegerType() }, False) ]),
+                False, False, {}
+            )
         )
 
     def test_combine_different_property_types_object_types(self):
-        self.assertEqual(
-            merge_types([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "foo": StringType() }, False) ]),
-            OneOfType([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "foo": StringType() }, False) ])
+        self.assertTrue(
+            are_bindable(
+                merge_types([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "foo": StringType() }, False) ]),
+                OneOfType([ ObjectType({ "foo": IntegerType() }, False), ObjectType({ "foo": StringType() }, False) ]),
+                False, False, {}
+            )
         )
 
     def test_revconst_preserved(self):
-        self.assertEqual(
-            merge_types([ ObjectType({ "foo": IntegerType() }, True) ]),
-            ObjectType({ "foo": IntegerType() }, True)
+        self.assertTrue(
+            are_bindable(
+                merge_types([ ObjectType({ "foo": IntegerType() }, True) ]),
+                ObjectType({ "foo": IntegerType() }, True),
+                False, False, {}
+            )
         )
 
     def test_single_revconst_is_dominated_by_nonrevconst(self):
-        self.assertEqual(
-            merge_types([ ObjectType({ "foo": IntegerType() }, True), ObjectType({ "foo": IntegerType() }, False) ]),
-            ObjectType({ "foo": IntegerType() }, False)
+        self.assertTrue(
+            are_bindable(
+                merge_types([ ObjectType({ "foo": IntegerType() }, True), ObjectType({ "foo": IntegerType() }, False) ]),
+                ObjectType({ "foo": IntegerType() }, False),
+                False, False, {}
+            )
         )
 
     def test_double_revconst_allows_merge(self):
-        self.assertEqual(
-            merge_types([ ObjectType({ "foo": UnitType(5) }, True), ObjectType({ "foo": IntegerType() }, True) ]),
-            ObjectType({ "foo": IntegerType() }, True)
+        self.assertTrue(
+            are_bindable(
+                merge_types([ ObjectType({ "foo": UnitType(5) }, True), ObjectType({ "foo": IntegerType() }, True) ]),
+                ObjectType({ "foo": IntegerType() }, True),
+                False, False, {}
+            )
         )
 
-    def test_double_incompatible_revconst_blocks_merge(self):
-        self.assertEqual(
-            merge_types([ ObjectType({ "foo": UnitType(5) }, True), ObjectType({ "foo": UnitType(6) }, True) ]),
-            OneOfType([ ObjectType({ "foo": UnitType(5) }, True), ObjectType({ "foo": UnitType(6) }, True) ])
+    def test_double_incompatible_non_revconst_blocks_merge(self):
+        self.assertTrue(
+            are_bindable(
+                merge_types([ ObjectType({ "foo": AnyType() }, False), ObjectType({ "foo": IntegerType() }, False) ]),
+                OneOfType([ ObjectType({ "foo": AnyType() }, False), ObjectType({ "foo": IntegerType() }, False) ]),
+                False, False, {}
+            )
+        )
+
+    def test_double_incompatible_revconst_blocks_merge2(self):
+        self.assertTrue(
+            are_bindable(
+                merge_types([ ObjectType({ "foo": UnitType(5) }, True), ObjectType({ "foo": UnitType(6) }, True) ]),
+                OneOfType([ ObjectType({ "foo": UnitType(5) }, True), ObjectType({ "foo": UnitType(6) }, True) ]),
+                False, False, {}
+            )
         )
 
 class TestRuntimeMutationChecks(TestCase):

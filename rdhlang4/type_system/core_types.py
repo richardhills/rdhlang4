@@ -39,6 +39,19 @@ def are_bindable(first, second, first_is_rev_const, second_is_rev_const, result_
             return False
     return True
 
+def are_break_types_equal(first, second):
+    for break_mode in set(list(first.keys()) + list(second.keys())):
+        first_break_type = first.get(break_mode, MISSING)
+        second_break_type = second.get(break_mode, MISSING)
+
+        if first_break_type is MISSING or second_break_type is MISSING:
+            return False
+
+        if not are_bindable(first_break_type, second_break_type, False, False, {}):
+            return False
+
+    return True
+
 class Type(object):
 
     def __init__(self, is_const=False):
@@ -83,12 +96,6 @@ class StringType(Type):
             "type": "String"
         }
 
-    def __hash__(self):
-        return hash("String")
-
-    def __eq__(self, other):
-        return isinstance(other, StringType)
-
     def __repr__(self):
         return "StringType"
 
@@ -109,12 +116,6 @@ class IntegerType(Type):
             "type": "Integer"
         }
 
-    def __hash__(self):
-        return hash("Integer")
-
-    def __eq__(self, other):
-        return isinstance(other, IntegerType)
-
     def __repr__(self):
         return "IntegerType"
 
@@ -133,12 +134,6 @@ class BooleanType(Type):
             "type": "Boolean"
         }
 
-    def __hash__(self):
-        return hash("Boolean")
-
-    def __eq__(self, other):
-        return isinstance(other, BooleanType)
-
     def __repr__(self):
         return "BooleanType"
 
@@ -152,12 +147,6 @@ class AnyType(Type):
         return {
             "type": "Any"
         }
-
-    def __hash__(self):
-        return hash("Any")
-
-    def __eq__(self, other):
-        return isinstance(other, AnyType)
 
     def __repr__(self):
         return "AnyType"
@@ -197,12 +186,6 @@ class VoidType(Type):
             "type": "Void"
         }
 
-    def __hash__(self):
-        return hash("Void")
-
-    def __eq__(self, other):
-        return isinstance(other, VoidType)
-
     def __repr__(self):
         return "VoidType"
 
@@ -224,12 +207,6 @@ class UnitType(Type):
             "value": self.value
         }
 
-    def __hash__(self, *args, **kwargs):
-        return hash(self.value)
-
-    def __eq__(self, other):
-        return isinstance(other, UnitType) and other.value == self.value
-
     def __repr__(self):
         if isinstance(self.value, str):
             return "UnitType<\"{}\">".format(self.value)
@@ -245,12 +222,6 @@ class UnknownType(Type):
             "type": "Unknown"
         }
 
-    def __hash__(self, *args, **kwargs):
-        return hash("Unknown")
-
-    def __eq__(self, other):
-        return False
-
     def __repr__(self):
         return "Unknown"
 
@@ -264,23 +235,26 @@ def flatten_types(types):
     return result
 
 def dedupe_types(types):
-    types_to_drop = set()
-    types_to_keep = set()
+    types_to_drop = list()
+    types_to_keep = list()
 
     if len(types) == 1:
         return types
 
-    for i1, t1 in enumerate(types):
-        t1_without_revconst = t1.visit(RemoveRevConst())
-        for i2, t2 in enumerate(types):
-            if t1 is not t2:
-                if t1_without_revconst.is_copyable_from(t2, {}):
-                    types_to_drop.add(t2)
-                if are_bindable(t1, t2, False, False, {}):
-                    types_to_keep.add(t1 if i1 > i2 else t2)
+    types_without_revconst = [t.visit(RemoveRevConst()) for t in types]
 
-    return list((set(types) - types_to_drop) | types_to_keep)
+    result_cache = {}
 
+    for i1, (tr1, t1) in enumerate(zip(types, types_without_revconst)):
+        for i2, (tr2, t2) in enumerate(zip(types, types_without_revconst)):
+            if i1 == i2:
+                continue
+            if t1.is_copyable_from(tr2, result_cache):
+                types_to_drop.append(tr2)
+                if i1 > i2 and t2.is_copyable_from(tr1, result_cache):
+                    types_to_keep.append(tr2)
+
+    return [ t for t in types if t not in types_to_drop ] + types_to_keep
 
 def merge_types(types):
     types = dedupe_types(flatten_types(types))
@@ -297,6 +271,9 @@ class OneOfType(Type):
 
     def __init__(self, types, *args, **kwargs):
         super(OneOfType, self).__init__(*args, **kwargs)
+        if len(types) > 100:
+            import pydevd
+            pydevd.settrace()
         self.types = types
 
     def is_copyable_from(self, other, result_cache):
@@ -333,17 +310,6 @@ class OneOfType(Type):
             new_type = merge_types(new_types)
 
         return visitor.exit(original_type=self, new_type=new_type, key=key, obj=obj)
-
-    def __hash__(self):
-        result = 0
-        for type in self.types:
-            result = result ^ hash(type)
-        return result
-
-    def __eq__(self, other):
-        if not isinstance(other, OneOfType):
-            return False
-        return set(self.types) == set(other.types)
 
     def __repr__(self):
         return "OneOfType<{}>".format(", ".join(repr(t) for t in self.types))
@@ -445,21 +411,6 @@ class ObjectType(Type):
                 name: value.to_dict() for name, value in self.property_types.items()
             }
         }
-
-    def __hash__(self):
-        result = 0
-        property_entries = self.property_types.items()
-
-        for property_name, property_type in property_entries:
-            result = result ^ hash(property_name)
-            #result = result ^ hash(property_type)
-
-        return result
-
-    def __eq__(self, other):
-        if not isinstance(other, ObjectType):
-            return False
-        return are_bindable(self.visit(RemoveRevConst()), other, False, other.is_rev_const, {})
 
 def type_repr(type):
     visitor = TypeRepr()
@@ -630,20 +581,6 @@ class FunctionType(Type):
             }
         }
 
-    def __hash__(self):
-        result = 0
-        result = result ^ hash(self.argument_type)
-        for mode, type in self.break_types.items():
-            result = result ^ hash(mode)
-            result = result ^ hash(type)
-        return result
-
-    def __eq__(self, other):
-        if not isinstance(other, FunctionType):
-            return False
-
-        return are_bindable(self, other, False, False)
-
     def __repr__(self):
         return "Function<{} => {}>".format(self.argument_type, self.break_types)
 
@@ -654,15 +591,6 @@ class PythonFunction(Type):
 
     def is_copyable_from(self, other, result_cache):
         return isinstance(other, PythonFunction)
-
-    def __hash__(self, *args, **kwargs):
-        return hash(self.func)
-
-    def __eq__(self, other):
-        if not isinstance(other, PythonFunction):
-            return False
-
-        return other.func is self.func
 
     def __repr__(self):
         return "PythonFunction<{}>".format(self.func)

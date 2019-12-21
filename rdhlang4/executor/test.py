@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+from posix import remove
 import unittest
 from unittest.case import TestCase
 
@@ -9,9 +10,8 @@ from rdhlang4.executor.executor import PreparedFunction, PreparationException, \
     BreakException, JumpOpcode, DynamicDereferenceOpcode, PrepareOpcode, \
     enforce_application_break_mode_constraints, OPCODES
 from rdhlang4.parser.rdhparser import parse, prepare_code
-from rdhlang4.type_system.core_types import ObjectType, IntegerType, merge_types,\
-    RemoveRevConst
-from posix import remove
+from rdhlang4.type_system.core_types import ObjectType, IntegerType, merge_types, \
+    RemoveRevConst, are_break_types_equal
 
 
 class TestExecutor(TestCase):
@@ -302,7 +302,9 @@ class TestExecutor(TestCase):
             }
         """)
         function = PreparedFunction(ast)
-        self.assertEqual(function.break_types, { "return": IntegerType(), "exit": IntegerType() })
+        self.assertTrue(are_break_types_equal(
+            function.break_types, { "return": IntegerType(), "exit": IntegerType() })
+        )
         self.assertEqual(function.invoke(), ((5 ** 2) ** 2) ** 2)
 
 class TestExtraStatics(TestCase):

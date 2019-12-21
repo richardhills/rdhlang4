@@ -128,9 +128,9 @@ class CrystalTypeCreator(object):
                 return PythonFunction(value)
             if isinstance(value, PreparedFunction):
                 return value.get_type()
-            if value == NO_VALUE:
+            if value is NO_VALUE:
                 return VoidType()
-            if value == None:
+            if value is None:
                 return UnitType(None)
             if isinstance(value, list):
                 result = ListType([
@@ -319,7 +319,7 @@ class ObjectManager(object):
         object_manager = self
 
         def new_setattr(self, property_name, new_value):
-            if new_value == MISSING:
+            if new_value is MISSING:
                 raise DataIntegrityError()
 
             object_manager.check_assignment(property_name, new_value)

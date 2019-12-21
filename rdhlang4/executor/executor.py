@@ -986,7 +986,7 @@ class PreparedFunction(object):
             code_type = MISSING
 
         function_might_not_terminate = False
-        if local_initializer_type == MISSING and initializer_break_types == {}:
+        if local_initializer_type is MISSING and initializer_break_types == {}:
             function_might_not_terminate = True
         if local_initializer_type is not MISSING:
             if code_break_types == {}:
