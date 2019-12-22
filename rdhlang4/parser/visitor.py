@@ -2,9 +2,10 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-from rdhlang4.parser.langVisitor import langVisitor
-from rdhlang4.utils import spread_dict, MISSING, InternalMarker, default
 from rdhlang4.exception_types import FatalException
+from rdhlang4.parser.langVisitor import langVisitor
+from rdhlang4.type_system.values import Object, List
+from rdhlang4.utils import spread_dict, MISSING, InternalMarker, default
 
 
 class ParseError(Exception):
@@ -16,13 +17,14 @@ class InvalidCodeError(Exception):
 
 
 def is_expression(code):
-    return isinstance(code, dict) and "opcode" in code
+    return hasattr(code, "opcode")
+#    return isinstance(code, dict) and "opcode" in code
 
 
 def add_debugging(expression, ctx):
     if ctx:
-        expression["line"] = ctx.start.line
-        expression["column"] = ctx.start.column
+        expression.line = ctx.start.line
+        expression.column = ctx.start.column
     return expression
 
 def new_tuple_op(values, ctx=None):
@@ -31,10 +33,10 @@ def new_tuple_op(values, ctx=None):
     for value in values:
         if not is_expression(value):
             raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "new_tuple",
         "values": values
-    }, ctx)
+    }), ctx)
 
 def new_object_op(properties, ctx=None):
     if not isinstance(properties, dict):
@@ -44,27 +46,27 @@ def new_object_op(properties, ctx=None):
             raise InvalidCodeError()
         if not is_expression(expression):
             raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "new_object",
-        "properties": properties
-    }, ctx)
+        "properties": Object(properties)
+    }), ctx)
 
 
 def merge_op(first, second, ctx=None):
     if not is_expression(first) or not is_expression(second):
         raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "merge",
         "first": first,
         "second": second
-    }, ctx)
+    }), ctx)
 
 
 def literal_op(value, ctx=None):
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "literal",
         "value": value
-    }, ctx)
+    }), ctx)
 
 
 def type_op(name, ctx=None, **kwargs):
@@ -74,7 +76,7 @@ def type_op(name, ctx=None, **kwargs):
         "type": literal_op(name, ctx)
     }
     properties.update(**kwargs)
-    return new_object_op(properties, ctx)
+    return new_object_op(Object(properties), ctx)
 
 def one_of_type(types, ctx=None):
     return type_op(
@@ -86,9 +88,9 @@ def one_of_type(types, ctx=None):
 def object_type(properties, ctx=None):
     return type_op(
         "Object", ctx, **{
-            "properties": new_object_op({
+            "properties": new_object_op(Object({
                 property: type for property, type in properties.items()
-            }, ctx)
+            }), ctx)
         }
     )
 
@@ -103,36 +105,36 @@ def function_type(argument, breaks, ctx=None):
 
 
 def nop():
-    return {
+    return Object({
         "opcode": "nop"
-    }
+    })
 
 
 def comma_op(expressions, ctx=None):
     if not isinstance(expressions, list):
         raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "comma",
-        "expressions": expressions
-    }, ctx)
+        "expressions": List(expressions)
+    }), ctx)
 
 def loop_op(expression, ctx=None):
     if not is_expression(expression):
         raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "loop",
         "code": expression
-    }, ctx)
+    }), ctx)
 
 def conditional_op(condition, true_code, false_code, ctx=None):
     if not is_expression(condition) or not is_expression(true_code) or not is_expression(false_code):
         raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "conditional",
         "condition": condition,
         "true_code": true_code,
         "false_code": false_code
-    }, ctx)
+    }), ctx)
 
 def jump_op(function_expression, argument_expression, ctx=None):
     if not is_expression(function_expression):
@@ -145,18 +147,18 @@ def jump_op(function_expression, argument_expression, ctx=None):
     }
     if argument_expression:
         code["argument"] = argument_expression
-    return add_debugging(code, ctx)
+    return add_debugging(Object(code), ctx)
 
 
 def transform_op(code_expression, ctx=None, input="value", output="value"):
     if not is_expression(code_expression):
         raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "transform",
         "code": code_expression,
         "input": input,
         "output": output
-    }, ctx)
+    }), ctx)
 
 
 def break_op(type, value, ctx=None):
@@ -171,76 +173,76 @@ def break_op(type, value, ctx=None):
             "code": value,
             "input": "value"
         })
-    return add_debugging(code, ctx)
+    return add_debugging(Object(code), ctx)
 
 
 def catch_op(type, code_expression, ctx=None):
     if not is_expression(code_expression):
         raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "transform",
         "input": type,
         "output": "value",
         "code": code_expression
-    }, ctx)
+    }), ctx)
 
 def binary_op(opcode, lvalue, rvalue, ctx=None):
     if not is_expression(lvalue) or not is_expression(rvalue):
         raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": opcode,
         "lvalue": lvalue,
         "rvalue": rvalue
-    }, ctx)
+    }), ctx)
 
 def negation_op(expression, ctx=None):
     if not is_expression(expression):
         raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "negation",
         "expression": expression
-    }, ctx)
+    }), ctx)
 
 def not_op(expression, ctx=None):
     if not is_expression(expression):
         raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "not",
         "expression": expression
-    }, ctx)
+    }), ctx)
 
 
 def assignment_op(dereference, rvalue, ctx=None):
     if not is_expression(dereference) or not is_expression(rvalue):
         raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "assignment",
         "dereference": dereference,
         "rvalue": rvalue
-    }, ctx)
+    }), ctx)
 
 
 def context_op():
-    return { "opcode": "context" }
+    return Object({ "opcode": "context" })
 
 
 def dereference_op(reference, of, ctx=None):
     if not is_expression(reference) or not is_expression(of):
         raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "dereference",
         "reference": reference,
         "of": of
-    }, ctx)
+    }), ctx)
 
 
 def unbound_dereference_op(reference, ctx=None):
     if not isinstance(reference, str):
         raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "unbound_dereference",
         "reference": reference
-    }, ctx)
+    }), ctx)
 
 
 def symbolic_dereference_ops(parts, ctx=None):
@@ -263,18 +265,18 @@ NO_EXIT = InternalMarker("NO_EXIT")
 def prepare_op(function_expression, ctx=None):
     if not is_expression(function_expression):
         raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "prepare",
         "function": function_expression
-    }, ctx)
+    }), ctx)
 
 def import_op(name_expression, ctx=None):
     if not is_expression(name_expression):
         raise InvalidCodeError()
-    return add_debugging({
+    return add_debugging(Object({
         "opcode": "import",
         "name": name_expression
-    }, ctx)
+    }), ctx)
 
 
 class FunctionStub(object):
@@ -403,7 +405,7 @@ class FunctionStub(object):
 
         if output_mode == "function":
             result["code"] = code_expression
-            return result
+            return Object(result)
         elif output_mode == "expression":
             result["code"] = break_op("function_stub_finished", code_expression)
             return catch_op(
@@ -648,7 +650,7 @@ class RDHLang4Visitor(langVisitor):
         for literalPair in ctx.literalPair():
             key, value = self.visit(literalPair)
             result[key] = value
-        return result
+        return Object(result)
 
     def visitLiteralPair(self, ctx):
         if ctx.SYMBOL():
@@ -657,21 +659,10 @@ class RDHLang4Visitor(langVisitor):
             property = ctx.STRING().getText()[1:-1]
         return (property, self.visit(ctx.literal()))
 
-    def visitArray(self, ctx):
-        raise ValueError()
-# 
-#         n = ctx.getChildCount()
-#         result = []
-#         for i in range(1, n - 1):
-#             result.append(self.visitValue(ctx.getChild(i)))
-#         if any([isinstance(r, OpcodeExpression) for r in result]):
-#             result = OpcodeExpression({
-#                 "opcode": "array_template",
-#                 "elements": {
-#                     ensure_data_is_opcode(value) for value in result
-#                 }
-#             })
-#         return result
+    def visitNewTuple(self, ctx):
+        expressions = [self.visit(e) for e in ctx.expression()]
+
+        return new_tuple_op(expressions, ctx)
 
     def visitBoundDereference(self, ctx):
         of = self.visit(ctx.expression())

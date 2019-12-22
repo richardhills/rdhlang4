@@ -12,6 +12,7 @@ from rdhlang4.executor.executor import PreparedFunction, PreparationException, \
 from rdhlang4.parser.rdhparser import parse, prepare_code
 from rdhlang4.type_system.core_types import ObjectType, IntegerType, merge_types, \
     RemoveRevConst, are_break_types_equal
+from rdhlang4.utils import NO_VALUE
 
 
 class TestExecutor(TestCase):
@@ -176,6 +177,23 @@ class TestExecutor(TestCase):
         with self.assertRaises(PreparationException) as cm:
             PreparedFunction(ast)
 
+    def test_empty_list_instantiation(self):
+        code = prepare_code("""
+            function() {
+                var l = [];
+            }
+        """)
+        code.invoke()
+
+#     def test_list1(self):
+#         code = prepare_code("""
+#             function() {
+#                 var l = [ 42 ];
+#                 return l[0];
+#             }
+#         """)
+#         self.assertEquals(code.invoke(), 42)
+
     def test_python_like_code(self):
         ast = parse("""
             function(Void => Any) {
@@ -220,7 +238,14 @@ class TestExecutor(TestCase):
         """)
         function = PreparedFunction(ast)
         self.assertEqual(function.invoke(), 42)
- 
+
+    def test_inferred_empty_object_type(self):
+        function = prepare_code("""
+            function() {
+                var foo = {};
+            }
+        """)
+        self.assertEqual(function.invoke(), NO_VALUE)
 
     def test_doubler(self):
         ast = parse("""
@@ -513,6 +538,36 @@ class TestMiscelaneous(TestCase):
             Baz baz = "hello";
             Bar b = { foo: 123 };
             return foo;
+        """)
+        self.assertEqual(function.invoke(), 123);
+
+    def test12(self):
+        function = prepare_code("""
+        {
+            "static": {
+              "opcode": "new_object",
+              "properties": {
+                "breaks": {
+                  "opcode": "new_object",
+                  "properties": {
+                    "return": {
+                      "opcode": "new_object",
+                      "properties": {
+                        "type": { "opcode": "literal", "value": "Unit" },
+                        "value": { "opcode": "literal", "value": 123 }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "code": {
+              "opcode": "transform",
+              "output": "return",
+              "input": "value",
+              "code": { "opcode": "literal", "value": 123 }
+            }
+        }
         """)
         self.assertEqual(function.invoke(), 123);
 

@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+import json
 import unittest
 from unittest.case import TestCase
 
@@ -10,6 +11,7 @@ from rdhlang4.parser.visitor import new_object_op, type_op, object_type, assignm
     symbolic_dereference_ops, literal_op, break_op, jump_op, \
     prepare_op, nop, comma_op, transform_op, function_type, catch_op, \
     binary_op
+from rdhlang4.type_system.values import Object
 
 
 class TestJSONParsing(TestCase):
@@ -243,7 +245,7 @@ class TestLocalVariables(TestCase):
                 String bar = "hello";
             }
         """)
-        CORRECT = {
+        CORRECT = Object({
             "static": new_object_op({
                 "argument": type_op("Void"),
                 "breaks": new_object_op({
@@ -277,7 +279,7 @@ class TestLocalVariables(TestCase):
                     "code": break_op("function_stub_finished", break_op("return", nop()))
                 })), nop()))
             ])
-        }
+        })
 
         self.assertEqual(ast, CORRECT)
 

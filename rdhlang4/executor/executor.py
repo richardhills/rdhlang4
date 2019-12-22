@@ -2,6 +2,9 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+from _ast import Expression
+from _collections_abc import Iterable
+
 import requests
 
 from rdhlang4.exception_types import FatalException, PreparationException, \
@@ -115,6 +118,8 @@ class CommaOpcode(Opcode):
 
     def __init__(self, data, visitor):
         super(CommaOpcode, self).__init__(data)
+        if not isinstance(self.data, Iterable):
+            raise PreparationException()
         self.expressions = [
             enrich_opcode(e, visitor) for e in self.data["expressions"]
         ]
@@ -337,10 +342,15 @@ class TransformBreak(Opcode):
         super(TransformBreak, self).__init__(data)
         if "code" in self.data:
             self.expression = enrich_opcode(self.data["code"], visitor)
+            if "input" not in self.data:
+                raise PreparationException("input missing in transform opcode")
             self.input = self.data["input"]
         else:
             self.expression = None
             self.input = None
+        if "output" not in self.data:
+            raise PreparationException("output missing in transform opcode")
+
         self.output = self.data["output"]
 
     def get_break_types(self, context):
@@ -415,6 +425,9 @@ class LiteralValueOpcode(Opcode):
 
     def __init__(self, data, visitor):
         super(LiteralValueOpcode, self).__init__(data)
+        if "value" not in self.data:
+            raise PreparationException("value missing in literal opcode")
+
         self.value = self.data["value"]
         self.type = create_crystal_type(self.value, True)
 
@@ -434,6 +447,8 @@ class NewObjectOpcode(Opcode):
 
     def __init__(self, data, visitor):
         super(NewObjectOpcode, self).__init__(data)
+        if "properties" not in self.data:
+            raise PreparationException("properties missing in new_object opcode")
         self.properties = {
             k: enrich_opcode(v, visitor) for k, v in self.data["properties"].items()
         }
@@ -465,10 +480,10 @@ class NewObjectOpcode(Opcode):
         )
 
 
-class NewListOpcode(Opcode):
+class NewTupleOpcode(Opcode):
 
     def __init__(self, data, visitor):
-        super(NewListOpcode, self).__init__(data)
+        super(NewTupleOpcode, self).__init__(data)
         self.values = [ enrich_opcode(v, visitor) for v in self.data["values"] ]
 
     def get_break_types(self, context):
@@ -482,14 +497,14 @@ class NewListOpcode(Opcode):
 
         return merge_break_types(
             other_breaks_types + [{
-                "value": ListType(value_types)
+                "value": ListType(value_types, AnyType(), True)
             }]
         )
 
     def jump(self, context):
         raise BreakException(
             "value",
-            List([ evaluate(value, context) for value in self.values])
+            List([ evaluate(value, context) for value in self.values ])
         )
 
 
@@ -804,7 +819,7 @@ OPCODES = {
     "assignment": AssignmentOpcode,
     "literal": LiteralValueOpcode,
     "new_object": NewObjectOpcode,
-    "new_list": NewListOpcode,
+    "new_tuple": NewTupleOpcode,
     "merge": MergeOpcode,
     "dereference": DereferenceOpcode,
     "dynamic_dereference": DynamicDereferenceOpcode,
@@ -829,7 +844,7 @@ def enrich_opcode(data, visitor):
     if visitor:
         data = visitor(data)
 
-    opcode = data.get("opcode", MISSING)
+    opcode = getattr(data, "opcode", MISSING)
     if opcode is MISSING:
         raise PreparationException("No opcode found in {}".format(data))
     if opcode not in OPCODES:
@@ -865,7 +880,8 @@ TYPES = {
     "Void": lambda data: VoidType(),
     "String": lambda data: StringType(),
     "Function": create_function_type_from_data,
-    "Inferred": lambda data: InferredType()
+    "Inferred": lambda data: InferredType(),
+    "Unit": lambda data: UnitType(data["value"])
 }
 
 
@@ -892,55 +908,57 @@ class UnboundDereferenceBinder(object):
         if hasattr(self.context, "types"):
             argument_type = getattr(self.context.types, "argument", MISSING)
             if isinstance(argument_type, ObjectType) and reference in argument_type.property_types:
-                return {
+                return Object({
                     "opcode": "dereference",
                     "reference": literal_op("argument", None),
                     "of": context_opcode
-                }
+                })
             local_type = getattr(self.context.types, "local", MISSING)
             if isinstance(local_type, ObjectType) and reference in local_type.property_types:
-                return {
+                return Object({
                     "opcode": "dereference",
                     "reference": literal_op("local", None),
                     "of": context_opcode
-                }
+                })
             static = getattr(self.context, "static", MISSING)
             if isinstance(static, Object) and reference in static:
-                return {
+                return Object({
                     "opcode": "dereference",
                     "reference": literal_op("static", None),
                     "of": context_opcode
-                }
+                })
             outer_context = getattr(self.context, "outer", MISSING)
             if outer_context is not MISSING:
-                return UnboundDereferenceBinder(outer_context).check_context_for_of(reference, {
+                return UnboundDereferenceBinder(outer_context).check_context_for_of(reference, Object({
                     "opcode": "dereference",
                     "reference": literal_op("outer", None),
                     "of": context_opcode
-                })
+                }))
 
     def __call__(self, expression):
         if not isinstance(expression, dict):
-            raise FatalException()
-        if expression["opcode"] == "unbound_dereference":
+            return expression
+
+        if expression.get("opcode", MISSING) == "unbound_dereference":
             reference = expression["reference"]
             if reference == "bam":
                 pass
             of_reference = self.check_context_for_of(reference)
 
             if of_reference:
-                code = {
+                code = Object({
                     "opcode": "dereference",
                     "of": of_reference,
                     "reference": literal_op(reference, None)
-                }
+                })
             else:
-                code = {
+                code = Object({
                     "opcode": "dynamic_dereference",
                     "reference": literal_op(reference, None)
-                }
+                })
 
             return code
+
         return expression
 
 
@@ -976,7 +994,10 @@ class PreparedFunction(object):
         except BreakException as e:
             raise PreparationException("BreakException while evaluating statics: {}: {}".format(e.mode, e.value))
 
-        self.argument_type = enrich_type(self.static.argument)
+        if hasattr(self.static, "argument"):
+            self.argument_type = enrich_type(self.static.argument)
+        else:
+            self.argument_type = VoidType()
 
         self.with_argument_type_context = Object({
             "static": self.static,
@@ -996,7 +1017,10 @@ class PreparedFunction(object):
 
         local_initializer_type, initializer_break_types = get_expression_break_types(self.local_initializer, self.with_argument_type_context, MISSING)
 
-        self.local_type = enrich_type(self.static.local).replace_inferred_types(local_initializer_type)
+        if hasattr(self.static, "local"):
+            self.local_type = enrich_type(self.static.local).replace_inferred_types(local_initializer_type).visit(RemoveRevConst())
+        else:
+            self.local_type = VoidType()
 
         local_initializer_assignment_break_types = {}
         if not self.local_type.is_copyable_from(local_initializer_type, {}):
@@ -1034,9 +1058,12 @@ class PreparedFunction(object):
         if function_might_not_terminate:
             did_not_terminate_break_types["exception"] = self.DID_NOT_TERMINATE.get_type()
 
-        break_types_data = self.static.get("breaks", {
-            "return": { "type": "Void" }
-        });
+        if hasattr(self.static, "breaks"):
+            break_types_data = self.static.breaks
+        else:
+            break_types_data = {
+                "return": { "type": "Void" }
+            }
 
         default_break_type = MISSING
 

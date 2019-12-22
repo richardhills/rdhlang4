@@ -47,9 +47,8 @@ literalPair
    | STRING ':' literal
    ;
    
-array
-   : '[' expression (',' expression)* ']'
-   | '[' ']'
+newTuple
+   : '[' expression? (',' expression)* ']'
    ;
 
 expression
@@ -78,7 +77,7 @@ expression
    | ifBlock                       # toIf
    | functionLiteral               # toFunctionLiteral
    | newObject                     # toNewObject
-   | array                         # toArray
+   | newTuple                      # toNewTuple
    | 'true'                        # true
    | 'false'                       # false
    | 'null'                        # null

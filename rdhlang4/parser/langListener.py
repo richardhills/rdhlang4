@@ -125,12 +125,12 @@ class langListener(ParseTreeListener):
         pass
 
 
-    # Enter a parse tree produced by langParser#array.
-    def enterArray(self, ctx:langParser.ArrayContext):
+    # Enter a parse tree produced by langParser#newTuple.
+    def enterNewTuple(self, ctx:langParser.NewTupleContext):
         pass
 
-    # Exit a parse tree produced by langParser#array.
-    def exitArray(self, ctx:langParser.ArrayContext):
+    # Exit a parse tree produced by langParser#newTuple.
+    def exitNewTuple(self, ctx:langParser.NewTupleContext):
         pass
 
 
@@ -251,15 +251,6 @@ class langListener(ParseTreeListener):
         pass
 
 
-    # Enter a parse tree produced by langParser#toArray.
-    def enterToArray(self, ctx:langParser.ToArrayContext):
-        pass
-
-    # Exit a parse tree produced by langParser#toArray.
-    def exitToArray(self, ctx:langParser.ToArrayContext):
-        pass
-
-
     # Enter a parse tree produced by langParser#toReturnExpression.
     def enterToReturnExpression(self, ctx:langParser.ToReturnExpressionContext):
         pass
@@ -356,6 +347,15 @@ class langListener(ParseTreeListener):
 
     # Exit a parse tree produced by langParser#assignment.
     def exitAssignment(self, ctx:langParser.AssignmentContext):
+        pass
+
+
+    # Enter a parse tree produced by langParser#toNewTuple.
+    def enterToNewTuple(self, ctx:langParser.ToNewTupleContext):
+        pass
+
+    # Exit a parse tree produced by langParser#toNewTuple.
+    def exitToNewTuple(self, ctx:langParser.ToNewTupleContext):
         pass
 
 

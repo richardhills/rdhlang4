@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
+from _collections_abc import MutableSequence, Iterable
 import sys
 import threading
 import weakref
@@ -132,7 +133,7 @@ class CrystalTypeCreator(object):
                 return VoidType()
             if value is None:
                 return UnitType(None)
-            if isinstance(value, list):
+            if isinstance(value, (list, List)):
                 result = ListType([
                     self.find_or_create_crystal_type(p, None) for p in value
                 ], VoidType(), self.set_is_rev_const)
@@ -284,9 +285,9 @@ class LazyCrystalObjectType(ObjectType):
 def get_manager(obj):
     manager = MANAGER_CACHE.get_manager(obj)
     if manager is None:
-        if isinstance(obj, list):
+        if isinstance(obj, List):
             manager = ListManager(obj)
-        elif isinstance(obj, dict) or hasattr(obj, "__dict__"):
+        elif hasattr(obj, "__dict__"):
             manager = ObjectManager(obj)
 
         if manager:
@@ -313,6 +314,8 @@ class ObjectManager(object):
     def __init__(self, obj):
         self.obj = obj
         self.type_references = []
+        if hasattr(obj, "wrapped"):
+            raise ValueError()
         obj.__class__ = self.create_new_managed_type(obj.__class__)
 
     def create_new_managed_type(self, cls):
@@ -358,6 +361,9 @@ class ObjectManager(object):
         if not isinstance(new_type_reference, ObjectType):
             return False
 
+        if new_type_reference.is_rev_const:
+            raise FatalException()
+
         current_value_type = create_crystal_type(self.obj, True, mask_type=new_type_reference)
         if not are_bindable(new_type_reference, current_value_type, False, True, {}):
             return False
@@ -389,34 +395,41 @@ class ObjectManager(object):
             raise CreateReferenceError()
 
 
-class List(list):
-
-    def __init__(self, *args, **kwargs):
+class List(MutableSequence):
+    def __init__(self, values, *args, **kwargs):
         super(List, self).__init__(*args, **kwargs)
+        self.wrapped = list(values)
         get_manager(self)
 
+    def __len__(self):
+        return len(self.wrapped)
+
+    def __getitem__(self, i):
+        return self.wrapped[i]
+
+    def __delitem__(self, i):
+        del self.wrapped[i]
+
+    def __setitem__(self, i, v):
+        if not get_manager(self).check_assignment(i, v):
+            raise CreateReferenceError()
+        self.wrapped[i] = v
+
+    def insert(self, i, v):
+        if not get_manager(self).check_assignment(i, v):
+            raise CreateReferenceError()
+        self.wrapped.insert(i, v)
+
+    def __eq__(self, other):
+        if not isinstance(other, List):
+            return False
+        return self.wrapped == other.wrapped
 
 class ListManager(object):
 
     def __init__(self, list):
         self.list = list
         self.type_references = []
-        list.__class__ = self.create_new_managed_type(list.__class__)
-
-    def create_new_managed_type(self, cls):
-        list_manager = self
-
-        class NewManagedType(cls):
-
-            def __setitem__(self, index, new_value):
-                if new_value == MISSING:
-                    raise DataIntegrityError()
-        
-                list_manager.check_assignment(index, new_value)
-        
-                super(List, self).__setitem__(index, new_value)
-
-        return NewManagedType
 
     def get_type_references(self):
         for r in self.type_references:
@@ -446,22 +459,44 @@ class ListManager(object):
         if not isinstance(new_type_reference, ListType):
             return False
 
-        current_value_type = create_crystal_type(self, True, new_type_reference)
+        if new_type_reference.is_rev_const:
+            raise FatalException()
+
+        current_value_type = create_crystal_type(self.list, True, new_type_reference)
         if not are_bindable(new_type_reference, current_value_type, False, True, {}):
             return False
 
         for other_type_reference in self.get_type_references():
             if isinstance(other_type_reference, ListType):
-                if not are_common_entries_compatible(new_type_reference, other_type_reference):
+                if not are_common_entries_compatible(new_type_reference, other_type_reference, {}):
                     return False
+
+                if len(other_type_reference.entry_types) > len(new_type_reference.entry_types):
+                    for other_type in other_type_reference.entry_types[len(new_type_reference.entry_types):]:
+                        if not are_bindable(other_type, new_type_reference.wildcard_type, other_type_reference.is_rev_const, new_type_reference.is_rev_const, {}):
+                            return False
+                if len(other_type_reference.entry_types) < len(new_type_reference.entry_types):
+                    for new_type in new_type_reference.entry_types[len(other_type_reference.entry_types):]:
+                        if not are_bindable(new_type, other_type_reference.wildcard_type, new_type_reference.is_rev_const, other_type_reference.is_rev_const, {}):
+                            return False
+
+                if not are_bindable(
+                    other_type_reference.wildcard_type,
+                    new_type_reference.wildcard_type,
+                    other_type_reference.is_rev_const,
+                    new_type_reference.is_rev_const,
+                    {}
+                ):
+                    return False
+
         return True
 
     def create_reference_on_all_child_references(self, new_type_reference):
         for index, new_entry_type in enumerate(new_type_reference.entry_types):
             # Identify whether the reference is to a thing that also needs constraining with create_reference
-            our_property_value = self[index]
+            our_property_value = self.list[index]
             if isinstance(our_property_value, (Object, List)):
-                get_object_manager(our_property_value).create_reference(new_entry_type, True)
+                get_manager(our_property_value).create_reference(new_entry_type, True)
 
     def store_reference(self, new_type_reference, use_weak_ref):
         if use_weak_ref:

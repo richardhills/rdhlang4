@@ -74,8 +74,8 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
-    # Visit a parse tree produced by langParser#array.
-    def visitArray(self, ctx:langParser.ArrayContext):
+    # Visit a parse tree produced by langParser#newTuple.
+    def visitNewTuple(self, ctx:langParser.NewTupleContext):
         return self.visitChildren(ctx)
 
 
@@ -144,11 +144,6 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
-    # Visit a parse tree produced by langParser#toArray.
-    def visitToArray(self, ctx:langParser.ToArrayContext):
-        return self.visitChildren(ctx)
-
-
     # Visit a parse tree produced by langParser#toReturnExpression.
     def visitToReturnExpression(self, ctx:langParser.ToReturnExpressionContext):
         return self.visitChildren(ctx)
@@ -201,6 +196,11 @@ class langVisitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by langParser#assignment.
     def visitAssignment(self, ctx:langParser.AssignmentContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#toNewTuple.
+    def visitToNewTuple(self, ctx:langParser.ToNewTupleContext):
         return self.visitChildren(ctx)
 
 

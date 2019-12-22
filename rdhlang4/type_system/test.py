@@ -590,7 +590,7 @@ class TestCompileTimeOneOfTypeChecks(TestCase):
             )
         )
 
-class TestRuntimeMutationChecks(TestCase):
+class TestRuntimeObjectMutationChecks(TestCase):
 
     def test_successful_basic_assignment(self):
         foo = Object({
@@ -888,12 +888,94 @@ class TestRuntimeObjectTypeCastingChecks(TestCase):
         }, False), False)
 
 class TestRuntimeListTypeCastingChecks(TestCase):
-    def test_successful_single_create_reference(self):
-        return
+    def test_successful_empty_list_create_reference(self):
+        foo = List([])
+
+        get_manager(foo).create_reference(ListType([], IntegerType(), False), False)
+
+    def test_successful_integer_list_create_reference(self):
         foo = List([5, 3, 7])
 
         get_manager(foo).create_reference(ListType([], IntegerType(), False), False)
 
+    def test_successful_integer_list_create_reference2(self):
+        foo = List([5, 3, 7])
+
+        get_manager(foo).create_reference(ListType([], AnyType(), False), False)
+
+    def test_successful_integer_list_create_reference3(self):
+        foo = List([5, 3, 7])
+
+        get_manager(foo).create_reference(ListType([ IntegerType() ], IntegerType(), False), False)
+
+    def test_successful_integer_list_create_reference4(self):
+        foo = List([5, 3, 7])
+
+        get_manager(foo).create_reference(ListType([ AnyType() ], IntegerType(), False), False)
+
+    def test_successful_integer_list_create_reference5(self):
+        foo = List([5, 3, 7])
+
+        get_manager(foo).create_reference(ListType([ AnyType(), AnyType(), AnyType() ], VoidType(), False), False)
+
+    def test_failed_integer_list_create_reference(self):
+        foo = List([5, 3, 7])
+
+        with self.assertRaises(CreateReferenceError):
+            get_manager(foo).create_reference(ListType([ AnyType() ], VoidType(), False), False)
+
+    def test_failed_integer_list_create_reference2(self):
+        foo = List([5, 3, 7])
+
+        with self.assertRaises(CreateReferenceError):
+            get_manager(foo).create_reference(ListType([ AnyType() ], StringType(), False), False)
+
+    def test_failed_integer_list_create_reference3(self):
+        foo = List([5, 3, 7])
+
+        with self.assertRaises(CreateReferenceError):
+            get_manager(foo).create_reference(ListType([ StringType() ], AnyType(), False), False)
+
+    def test_failed_multiple_list_create_reference1A(self):
+        foo = List([5, 3, 7])
+
+        get_manager(foo).create_reference(ListType([], IntegerType(), False), False)
+        with self.assertRaises(CreateReferenceError):
+            get_manager(foo).create_reference(ListType([], AnyType(), False), False)
+
+    def test_failed_multiple_list_create_reference1B(self):
+        foo = List([5, 3, 7])
+
+        get_manager(foo).create_reference(ListType([], AnyType(), False), False)
+        with self.assertRaises(CreateReferenceError):
+            get_manager(foo).create_reference(ListType([], IntegerType(), False), False)
+
+    def test_failed_multiple_list_create_reference2A(self):
+        foo = List([5, 3, 7])
+
+        get_manager(foo).create_reference(ListType([ IntegerType() ], AnyType(), False), False)
+        with self.assertRaises(CreateReferenceError):
+            get_manager(foo).create_reference(ListType([], AnyType(), False), False)
+
+    def test_failed_multiple_list_create_reference2B(self):
+        foo = List([5, 3, 7])
+
+        get_manager(foo).create_reference(ListType([], AnyType(), False), False)
+        with self.assertRaises(CreateReferenceError):
+            get_manager(foo).create_reference(ListType([ IntegerType() ], AnyType(), False), False)
+
+
+    def test_successful_multiple_list_create_reference1(self):
+        foo = List([5, 3, 7])
+
+        get_manager(foo).create_reference(ListType([], AnyType(), False), False)
+        get_manager(foo).create_reference(ListType([], AnyType(), False), False)
+
+    def test_successful_multiple_list_create_reference2(self):
+        foo = List([5, 3, 7])
+
+        get_manager(foo).create_reference(ListType([ IntegerType() ], AnyType(), False), False)
+        get_manager(foo).create_reference(ListType([ IntegerType() ], AnyType(), False), False)
 
 if __name__ == '__main__':
     unittest.main()

@@ -466,7 +466,7 @@ class RemoveRevConst(object):
 
     def exit(self, original_type=None, new_type=None, key=None, obj=None):
         if id(original_type) not in self.results:
-            if isinstance(new_type, ObjectType) and new_type.is_rev_const:
+            if isinstance(new_type, (ObjectType, ListType)) and new_type.is_rev_const:
                 new_type.is_rev_const = False
             self.results[id(original_type)] = new_type
 
@@ -515,7 +515,6 @@ class ListType(Type):
                 if not are_bindable(self.wildcard_type, other_type, self.is_rev_const, other.is_rev_const, result_cache):
                     return False
         if not are_bindable(self.wildcard_type, other.wildcard_type, self.is_rev_const, other.is_rev_const, result_cache, ignore_void_types=True):
-            are_bindable(self.wildcard_type, other.wildcard_type, self.is_rev_const, other.is_rev_const, result_cache, ignore_void_types=True)
             return False
         return True
 
