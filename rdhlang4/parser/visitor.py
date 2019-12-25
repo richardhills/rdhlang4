@@ -94,6 +94,13 @@ def object_type(properties, ctx=None):
         }
     )
 
+def list_type(entry_types, wildcard_type, ctx=None):
+    return type_op(
+        "List", ctx, **{
+            "entry_types": new_tuple_op(entry_types),
+            "wildcard_type": wildcard_type
+        }
+    )
 
 def function_type(argument, breaks, ctx=None):
     return type_op(
@@ -668,7 +675,13 @@ class RDHLang4Visitor(langVisitor):
         of = self.visit(ctx.expression())
         reference = ctx.SYMBOL().getText()
         return dereference_op(literal_op(reference, ctx if self.debug else None), of, ctx if self.debug else None)
-    
+
+    def visitDynamicDereference(self, ctx):
+        of, reference = ctx.expression()
+        of = self.visit(of)
+        reference = self.visit(reference)
+        return dereference_op(reference, of, ctx if self.debug else None)
+
     def visitUnboundDereference(self, ctx):
         return symbolic_dereference_ops([ctx.SYMBOL().getText()], ctx if self.debug else None)
 
@@ -718,6 +731,17 @@ class RDHLang4Visitor(langVisitor):
             name: type for type, name in [self.visit(v) for v in ctx.propertyType()]
         }
         return object_type(properties, ctx if self.debug else None)
+
+    def visitListType(self, ctx):
+        return list_type(
+            [], self.visit(ctx.expression()), ctx if self.debug else None
+        )
+
+    def visitTupleType(self, ctx):
+        return list_type([
+                self.visit(e) for e in ctx.expression()
+            ], type_op("Void"), ctx if self.debug else None
+        )
 
     def visitPropertyType(self, ctx):
         return (self.visit(ctx.expression()), ctx.SYMBOL().getText())

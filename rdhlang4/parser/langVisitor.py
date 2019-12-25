@@ -139,6 +139,11 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#toListType.
+    def visitToListType(self, ctx:langParser.ToListTypeContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#toWhileLoop.
     def visitToWhileLoop(self, ctx:langParser.ToWhileLoopContext):
         return self.visitChildren(ctx)
@@ -171,6 +176,11 @@ class langVisitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by langParser#addition.
     def visitAddition(self, ctx:langParser.AdditionContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#dynamicDereference.
+    def visitDynamicDereference(self, ctx:langParser.DynamicDereferenceContext):
         return self.visitChildren(ctx)
 
 
@@ -249,6 +259,11 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#toTupleType.
+    def visitToTupleType(self, ctx:langParser.ToTupleTypeContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#toInferredType.
     def visitToInferredType(self, ctx:langParser.ToInferredTypeContext):
         return self.visitChildren(ctx)
@@ -296,6 +311,16 @@ class langVisitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by langParser#objectType.
     def visitObjectType(self, ctx:langParser.ObjectTypeContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#listType.
+    def visitListType(self, ctx:langParser.ListTypeContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#tupleType.
+    def visitTupleType(self, ctx:langParser.TupleTypeContext):
         return self.visitChildren(ctx)
 
 

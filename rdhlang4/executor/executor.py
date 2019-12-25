@@ -17,7 +17,7 @@ from rdhlang4.type_system.core_types import UnitType, ObjectType, Type, VoidType
     InferredType, OneOfType, ListType, PythonFunction, RemoveRevConst
 from rdhlang4.type_system.values import Object, List, \
     get_manager, create_crystal_type
-from rdhlang4.utils import InternalMarker, MISSING, NO_VALUE
+from rdhlang4.utils import InternalMarker, MISSING, NO_VALUE, spread_dict
 
 
 class BreakException(Exception):
@@ -388,6 +388,9 @@ class AssignmentOpcode(Opcode):
         self.rvalue = enrich_opcode(data["rvalue"], visitor)
 
     def get_break_types(self, context):
+        if not isinstance(get_expression_break_types(self.dereference, context, MISSING)[0], Type):
+            import pydevd
+            pydevd.settrace()
         dereference_type, dereference_break_types = get_expression_break_types(self.dereference, context, MISSING)
         rvalue_type, rvalue_break_types = get_expression_break_types(self.rvalue, context, MISSING)
         break_types = [
@@ -395,17 +398,20 @@ class AssignmentOpcode(Opcode):
         ]
         if dereference_type is not MISSING and rvalue_type is not MISSING:
             break_types.append({ "value": VoidType() })
-        if not dereference_type.is_copyable_from(rvalue_type, {}):
+        if not isinstance(dereference_type, Type) or not dereference_type.is_copyable_from(rvalue_type, {}):
             break_types.append({
                 "exception": self.INVALID_ASSIGNMENT.get_type(),
             })
         return merge_break_types(break_types)
 
     def jump(self, context):
-        reference, of = self.dereference.get_reference_and_of(context)
+        reference, of = self.dereference.get_reference_and_of(context, check_reference_exists=False)
         new_value = evaluate(self.rvalue, context)
         try:
-            setattr(of, reference, new_value)
+            if isinstance(reference, str):
+                setattr(of, reference, new_value)
+            if isinstance(reference, int):
+                of[reference] = new_value
         except IncompatableAssignmentError:
             raise self.INVALID_ASSIGNMENT(self)
 
@@ -497,7 +503,7 @@ class NewTupleOpcode(Opcode):
 
         return merge_break_types(
             other_breaks_types + [{
-                "value": ListType(value_types, AnyType(), True)
+                "value": ListType(value_types, VoidType(), True)
             }]
         )
 
@@ -662,44 +668,70 @@ class DereferenceOpcode(Opcode):
 
     def get_break_types(self, context):
         reference_type, reference_break_types = get_expression_break_types(self.reference, context)
-        self_break_types = {}
-        value_type = None
+
+        invalid_dereference_possible = False
 
         of_type, of_break_types = get_expression_break_types(self.of, context)
+        break_types = [ reference_break_types, of_break_types ]
+
         crystal_reference_value = reference_type.get_crystal_value()
 
         if isinstance(of_type, ObjectType) and isinstance(crystal_reference_value, str):
-            value_type = of_type.property_types.get(crystal_reference_value)
-
-        if value_type is None:
+            if crystal_reference_value in of_type.property_types:
+                value_type = of_type.property_types[crystal_reference_value]
+            else:
+                invalid_dereference_possible = True
+                value_type = AnyType() # TODO wildcard types
+        elif isinstance(of_type, ListType) and isinstance(crystal_reference_value, int):
+            if len(of_type.entry_types) > crystal_reference_value:
+                value_type = of_type.entry_types[crystal_reference_value]
+            else:
+                invalid_dereference_possible = True
+                if not isinstance(of_type.wildcard_type, VoidType):
+                    value_type = of_type.wildcard_type
+                else:
+                    value_type = MISSING
+        else:
+            invalid_dereference_possible = True
             value_type = AnyType()
-            self_break_types = {
+
+        if invalid_dereference_possible:
+            break_types.append({
                 "exception": self.INVALID_DEREFERENCE.get_type()
-            }
+            })
 
-        return merge_break_types([
-            reference_break_types, of_break_types, self_break_types, {
+        if value_type is not MISSING:
+            break_types.append({
                 "value": value_type
-            }
-        ])
+            })
 
-    def get_reference_and_of(self, context):
+        return merge_break_types(break_types)
+
+    def get_reference_and_of(self, context, check_reference_exists=True):
         of = evaluate(self.of, context)
 
         reference = evaluate(self.reference, context)
 
-        if not isinstance(of, object):
-            raise self.INVALID_DEREFERENCE()
-
-        if not hasattr(of, reference):
-            raise self.INVALID_DEREFERENCE()
+        if hasattr(of, "__dict__") and not isinstance(of, List):
+            if not isinstance(reference, str):
+                raise self.INVALID_DEREFERENCE()
+            if check_reference_exists and not hasattr(of, reference):
+                raise self.INVALID_DEREFERENCE()
+        elif isinstance(of, Iterable):
+            if not isinstance(reference, int):
+                raise self.INVALID_DEREFERENCE()
+            if len(of) <= reference:
+                raise self.INVALID_DEREFERENCE()
 
         return reference, of
 
     def jump(self, context):
         reference, of = self.get_reference_and_of(context)
 
-        value = getattr(of, reference)
+        if isinstance(reference, str):
+            value = getattr(of, reference)
+        if isinstance(reference, int):
+            value = of[reference]
 
         raise BreakException("value", value)
 
@@ -720,6 +752,7 @@ def dynamic_get_reference_and_of(context, reference):
     if outer is not MISSING and isinstance(outer, Object):
         return dynamic_get_reference_and_of(outer, reference)
 
+    return MISSING # Meaning we couldn't find it
 
 class DynamicDereferenceOpcode(Opcode):
     INVALID_DEREFERENCE = TypeErrorFactory("DynamicDereferenceOpcode: invalid_dereference")
@@ -738,11 +771,14 @@ class DynamicDereferenceOpcode(Opcode):
 
         return merge_break_types(break_types)
 
-    def get_reference_and_of(self, context):
+    def get_reference_and_of(self, context, check_reference_exists=False):
+        if check_reference_exists:
+            raise ValueError()
+
         reference = evaluate(self.reference, context)
 
         search_result = dynamic_get_reference_and_of(context, reference)
-        if search_result:
+        if search_result is not MISSING:
             return search_result
 
         # Fall back on it being a local variable
@@ -873,7 +909,14 @@ def create_function_type_from_data(data):
 
 TYPES = {
     "Any": lambda data: AnyType(),
-    "Object": lambda data: ObjectType({ name: enrich_type(type) for name, type in data["properties"].items() }, False),
+    "Object": lambda data: ObjectType({
+        name: enrich_type(type) for name, type in data["properties"].items()
+    }, False),
+    "List": lambda data: ListType(
+        [ enrich_type(type) for type in data["entry_types"] ],
+        enrich_type(data["wildcard_type"]),
+        False
+    ),
     "OneOf": lambda data: OneOfType([ enrich_type(type) for type in data["types"] ]),
     "Integer": lambda data: IntegerType(),
     "Boolean": lambda data: BooleanType(),

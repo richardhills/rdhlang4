@@ -412,12 +412,12 @@ class List(MutableSequence):
 
     def __setitem__(self, i, v):
         if not get_manager(self).check_assignment(i, v):
-            raise CreateReferenceError()
+            raise IncompatableAssignmentError()
         self.wrapped[i] = v
 
     def insert(self, i, v):
         if not get_manager(self).check_assignment(i, v):
-            raise CreateReferenceError()
+            raise IncompatableAssignmentError()
         self.wrapped.insert(i, v)
 
     def __eq__(self, other):

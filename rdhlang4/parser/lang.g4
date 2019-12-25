@@ -53,6 +53,7 @@ newTuple
 
 expression
    : expression '.' SYMBOL         # boundDereference
+   | expression '[' expression ']' # dynamicDereference
    | SYMBOL                        # unboundDereference
    | expression '(' ')'            # noParameterFunctionInvocation
    | expression '(' expression ')' # singleParameterFunctionInvocation
@@ -87,6 +88,8 @@ expression
    | stringType                    # toStringType
    | functionType                  # toFunctionType
    | objectType                    # toObjectType
+   | tupleType                     # toTupleType
+   | listType                      # toListType
    | anyType                       # toAnyType
    | returnExpression              # toReturnExpression
    | exitExpression                # toExitExpression
@@ -114,6 +117,14 @@ functionType
 
 objectType
    : 'Object' '{' (propertyType ';')* '}'
+   ;
+
+listType
+   : 'List' '<' expression '>'
+   ;
+
+tupleType
+   : 'Tuple' '<' expression (',' expression)* '>'
    ;
 
 anyType

@@ -32,7 +32,6 @@ class TestExecutor(TestCase):
         """)
         self.assertEqual(function.invoke(), 42)
 
-
     def test_return_number(self):
         ast = parse("""
             function(Void => Integer) {
@@ -82,7 +81,6 @@ class TestExecutor(TestCase):
         function = PreparedFunction(ast)
         self.assertEqual(function.invoke(), 42)
 
-
     def test_complex_chained_return_local(self):
         ast = parse("""
             function(Void => Integer) {
@@ -94,7 +92,6 @@ class TestExecutor(TestCase):
         """)
         function = PreparedFunction(ast)
         self.assertEqual(function.invoke(), 42)
-
 
     def test_invalid_assignment(self):
         ast = parse("""
@@ -130,7 +127,6 @@ class TestExecutor(TestCase):
         """)
         function = PreparedFunction(ast)
         self.assertEqual(function.invoke(), 42)
-
 
     def test_argument_access(self):
         ast = parse("""
@@ -179,20 +175,49 @@ class TestExecutor(TestCase):
 
     def test_empty_list_instantiation(self):
         code = prepare_code("""
-            function() {
-                var l = [];
+            function() nothrow {
+                Tuple<Integer, Integer> t = [ 4, 23 ];
+                List<Integer> l = [];
             }
         """)
         code.invoke()
 
-#     def test_list1(self):
-#         code = prepare_code("""
-#             function() {
-#                 var l = [ 42 ];
-#                 return l[0];
-#             }
-#         """)
-#         self.assertEquals(code.invoke(), 42)
+    def test_list1(self):
+        code = prepare_code("""
+            function() {
+                List<Integer> l = [ 42 ];
+                return l[0];
+            }
+        """)
+        self.assertEquals(code.invoke(), 42)
+
+    def test_list2(self):
+        code = prepare_code("""
+            function() nothrow {
+                Tuple<Integer> l = [ 42 ];
+                return l[0];
+            }
+        """)
+        self.assertEquals(code.invoke(), 42)
+
+    def test_list3(self):
+        code = prepare_code("""
+            function() nothrow {
+                Tuple<Integer, Integer> f = [ 30, 12 ];
+                return f[0] + f[1];
+            }
+        """)
+        self.assertEqual(code.invoke(), 42)
+
+    def test_list4(self):
+        code = prepare_code("""
+            function() nothrow {
+                Tuple<Integer> l = [ 12 ];
+                l[0] = 42;
+                return l[0];
+            }
+        """)
+        self.assertEquals(code.invoke(), 42)
 
     def test_python_like_code(self):
         ast = parse("""
@@ -216,6 +241,13 @@ class TestExecutor(TestCase):
         function = PreparedFunction(ast)
         self.assertTrue(isinstance(function.break_types["exception"], ObjectType))
         self.assertEqual(function.invoke(), 42)
+
+    def test_python_object_property(self):
+        ast = prepare_code("""
+            z = {};
+            z.qqq=123;
+        """)
+        ast.invoke()
 
     def test_broken_assignment(self):
         ast = parse("""
@@ -246,6 +278,17 @@ class TestExecutor(TestCase):
             }
         """)
         self.assertEqual(function.invoke(), NO_VALUE)
+
+    def test_inferred_simple_object_type(self):
+        return;
+        function = prepare_code("""
+            function() {
+                var foo = { bar: 123 };
+                foo.bar = 42;
+                return foo.bar;
+            }
+        """)
+        self.assertEqual(function.invoke(), 42)
 
     def test_doubler(self):
         ast = parse("""
@@ -332,7 +375,9 @@ class TestExecutor(TestCase):
         )
         self.assertEqual(function.invoke(), ((5 ** 2) ** 2) ** 2)
 
+
 class TestExtraStatics(TestCase):
+
     def test_extra_statics(self):
         ast = parse("""
             function(Void => Integer) nothrow {
@@ -366,8 +411,8 @@ class TestExtraStatics(TestCase):
         self.assertEqual(function.invoke(), 42)
 
 
-
 class TestPreparationErrors(TestCase):
+
     def test_invalid_code_fail_at_preparation(self):
         ast = parse("""
             function(Void => Integer) nothrow {
@@ -400,7 +445,9 @@ class TestPreparationErrors(TestCase):
         with self.assertRaises(BreakException) as cm:
             function.invoke()
 
+
 class TestImport(TestCase):
+
     def test_import(self):
         function = prepare_code("""
             import requests;
@@ -414,11 +461,13 @@ class TestImport(TestCase):
             OPCODES["equals"].MISSING_INTEGERS.get_type().visit(RemoveRevConst())
         ])
 
-        #self.assertTrue(expected.is_copyable_from(function.break_types["exception"], {}))
+        # self.assertTrue(expected.is_copyable_from(function.break_types["exception"], {}))
 
         self.assertEqual(function.invoke(), True)
 
+
 class TestMiscelaneous(TestCase):
+
     # Tests I've found don't work when playing.
     def test1(self):
         function = prepare_code("""foo = function() {};""");
@@ -571,6 +620,7 @@ class TestMiscelaneous(TestCase):
         """)
         self.assertEqual(function.invoke(), 123);
 
+
 class TestEuler(TestCase):
 #     def testProblem1a(self):
 #         function = prepare_code("""
@@ -583,7 +633,6 @@ class TestEuler(TestCase):
 #             return i;
 #         """)
 #         self.assertEqual(function.invoke(), 233168)
-
 
 #     def testProblem1b(self):
 #         function = prepare_code("""
@@ -623,7 +672,6 @@ class TestEuler(TestCase):
         """)
         enforce_application_break_mode_constraints(function)
         self.assertEqual(function.invoke(), 6857)
-
 
 
 if __name__ == '__main__':

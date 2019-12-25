@@ -242,6 +242,15 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#toListType.
+    def enterToListType(self, ctx:langParser.ToListTypeContext):
+        pass
+
+    # Exit a parse tree produced by langParser#toListType.
+    def exitToListType(self, ctx:langParser.ToListTypeContext):
+        pass
+
+
     # Enter a parse tree produced by langParser#toWhileLoop.
     def enterToWhileLoop(self, ctx:langParser.ToWhileLoopContext):
         pass
@@ -302,6 +311,15 @@ class langListener(ParseTreeListener):
 
     # Exit a parse tree produced by langParser#addition.
     def exitAddition(self, ctx:langParser.AdditionContext):
+        pass
+
+
+    # Enter a parse tree produced by langParser#dynamicDereference.
+    def enterDynamicDereference(self, ctx:langParser.DynamicDereferenceContext):
+        pass
+
+    # Exit a parse tree produced by langParser#dynamicDereference.
+    def exitDynamicDereference(self, ctx:langParser.DynamicDereferenceContext):
         pass
 
 
@@ -440,6 +458,15 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#toTupleType.
+    def enterToTupleType(self, ctx:langParser.ToTupleTypeContext):
+        pass
+
+    # Exit a parse tree produced by langParser#toTupleType.
+    def exitToTupleType(self, ctx:langParser.ToTupleTypeContext):
+        pass
+
+
     # Enter a parse tree produced by langParser#toInferredType.
     def enterToInferredType(self, ctx:langParser.ToInferredTypeContext):
         pass
@@ -527,6 +554,24 @@ class langListener(ParseTreeListener):
 
     # Exit a parse tree produced by langParser#objectType.
     def exitObjectType(self, ctx:langParser.ObjectTypeContext):
+        pass
+
+
+    # Enter a parse tree produced by langParser#listType.
+    def enterListType(self, ctx:langParser.ListTypeContext):
+        pass
+
+    # Exit a parse tree produced by langParser#listType.
+    def exitListType(self, ctx:langParser.ListTypeContext):
+        pass
+
+
+    # Enter a parse tree produced by langParser#tupleType.
+    def enterTupleType(self, ctx:langParser.TupleTypeContext):
+        pass
+
+    # Exit a parse tree produced by langParser#tupleType.
+    def exitTupleType(self, ctx:langParser.TupleTypeContext):
         pass
 
 
