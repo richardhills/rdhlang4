@@ -421,10 +421,13 @@ class AssignmentOpcode(Opcode):
 def clone_literal_value(value):
     if isinstance(value, (int, bool, str)):
         return value
+    if isinstance(value, list):
+        return List(value)
     if isinstance(value, dict):
         return Object({
-            k: clone_literal_value(v) for k, v in value
+            k: clone_literal_value(v) for k, v in value.items()
         })
+    raise DataIntegrityError()
 
 
 class LiteralValueOpcode(Opcode):
@@ -550,9 +553,10 @@ class MergeOpcode(Opcode):
         if not isinstance(first, Object) or not isinstance(second, Object):
             raise self.MISSING_OBJECTS()
 
-        raise BreakException("value", Object({
-            property: value for property, value in first.items() + second.items()
-        }))
+        result = dict(first)
+        result.update(second)
+
+        raise BreakException("value", Object(result))
 
 
 def BinaryOpcode(func, result_type, name):
@@ -597,6 +601,7 @@ def BinaryOpcode(func, result_type, name):
 
     return NewOpcode
 
+
 class NegationOpcode(Opcode):
     MISSING_INTEGERS = TypeErrorFactory("negation: missing_integers")
 
@@ -630,6 +635,7 @@ class NegationOpcode(Opcode):
             -value
         )
 
+
 class NotOpcode(Opcode):
     MISSING_BOOLEAN = TypeErrorFactory("NotOpcode: missing_boolean")
 
@@ -658,6 +664,7 @@ class NotOpcode(Opcode):
             raise self.MISSING_BOOLEAN()
         raise BreakException("value", not value)
 
+
 class DereferenceOpcode(Opcode):
     INVALID_DEREFERENCE = TypeErrorFactory("DereferenceOpcode: invalid_dereference")
 
@@ -681,7 +688,7 @@ class DereferenceOpcode(Opcode):
                 value_type = of_type.property_types[crystal_reference_value]
             else:
                 invalid_dereference_possible = True
-                value_type = AnyType() # TODO wildcard types
+                value_type = AnyType()  # TODO wildcard types
         elif isinstance(of_type, ListType) and isinstance(crystal_reference_value, int):
             if len(of_type.entry_types) > crystal_reference_value:
                 value_type = of_type.entry_types[crystal_reference_value]
@@ -752,7 +759,8 @@ def dynamic_get_reference_and_of(context, reference):
     if outer is not MISSING and isinstance(outer, Object):
         return dynamic_get_reference_and_of(outer, reference)
 
-    return MISSING # Meaning we couldn't find it
+    return MISSING  # Meaning we couldn't find it
+
 
 class DynamicDereferenceOpcode(Opcode):
     INVALID_DEREFERENCE = TypeErrorFactory("DynamicDereferenceOpcode: invalid_dereference")
@@ -794,11 +802,14 @@ class DynamicDereferenceOpcode(Opcode):
 
         raise BreakException("value", value)
 
+
 IMPORTABLE_THINGS = {
     "requests": requests
 }
 
+
 class ImportOpcode(Opcode):
+
     def __init__(self, data, visitor):
         super(ImportOpcode, self).__init__(data)
         self.name_expression = enrich_opcode(self.data["name"], visitor)
@@ -810,6 +821,7 @@ class ImportOpcode(Opcode):
         name = evaluate(self.name_expression, context)
         thing_to_import = IMPORTABLE_THINGS[name]
         raise BreakException("value", thing_to_import)
+
 
 def get_context_type(context):
     if not hasattr(context, "_context_type"):
@@ -826,6 +838,7 @@ def get_context_type(context):
         value_type["static"] = create_crystal_type(context.static, set_is_rev_const=False, lazy_object_types=True)
         context._context_type = ObjectType(value_type, False)
     return context._context_type
+
 
 class ContextOpcode(Opcode):
 
@@ -907,23 +920,30 @@ def create_function_type_from_data(data):
     })
 
 
+def get_is_const(data):
+    return data.get("is_const", False)
+
+
 TYPES = {
-    "Any": lambda data: AnyType(),
+    "Any": lambda data: AnyType(is_const=get_is_const(data)),
     "Object": lambda data: ObjectType({
         name: enrich_type(type) for name, type in data["properties"].items()
-    }, False),
+    }, is_rev_const=False, is_const=get_is_const(data)),
     "List": lambda data: ListType(
         [ enrich_type(type) for type in data["entry_types"] ],
         enrich_type(data["wildcard_type"]),
-        False
+        is_rev_const=False, is_const=get_is_const(data)
     ),
-    "OneOf": lambda data: OneOfType([ enrich_type(type) for type in data["types"] ]),
-    "Integer": lambda data: IntegerType(),
-    "Boolean": lambda data: BooleanType(),
+    "OneOf": lambda data: OneOfType(
+        [ enrich_type(type) for type in data["types"] ],
+        is_const=get_is_const(data)
+    ),
+    "Integer": lambda data: IntegerType(is_const=get_is_const(data)),
+    "Boolean": lambda data: BooleanType(is_const=get_is_const(data)),
     "Void": lambda data: VoidType(),
-    "String": lambda data: StringType(),
+    "String": lambda data: StringType(is_const=get_is_const(data)),
     "Function": create_function_type_from_data,
-    "Inferred": lambda data: InferredType(),
+    "Inferred": lambda data: InferredType(is_const=get_is_const(data)),
     "Unit": lambda data: UnitType(data["value"])
 }
 
@@ -1201,6 +1221,7 @@ def enforce_application_break_mode_constraints(function):
     exit_break_type = function.break_types.get("exit", None)
     if exit_break_type and not IntegerType().is_copyable_from(exit_break_type, {}):
         raise InvalidApplicationException("Application exits with {}, when Integer is expected".format(exit_break_type))
+
 
 def execute(ast):
     executor = PreparedFunction(ast)

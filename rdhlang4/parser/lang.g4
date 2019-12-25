@@ -91,6 +91,7 @@ expression
    | tupleType                     # toTupleType
    | listType                      # toListType
    | anyType                       # toAnyType
+   | constTypeModifier             # toConstTypeModifier
    | returnExpression              # toReturnExpression
    | exitExpression                # toExitExpression
    ;
@@ -129,6 +130,10 @@ tupleType
 
 anyType
    : 'Any'
+   ;
+
+constTypeModifier
+   : 'const' expression
    ;
 
 propertyType

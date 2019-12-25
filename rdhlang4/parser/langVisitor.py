@@ -149,6 +149,11 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#toConstTypeModifier.
+    def visitToConstTypeModifier(self, ctx:langParser.ToConstTypeModifierContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#toReturnExpression.
     def visitToReturnExpression(self, ctx:langParser.ToReturnExpressionContext):
         return self.visitChildren(ctx)
@@ -326,6 +331,11 @@ class langVisitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by langParser#anyType.
     def visitAnyType(self, ctx:langParser.AnyTypeContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#constTypeModifier.
+    def visitConstTypeModifier(self, ctx:langParser.ConstTypeModifierContext):
         return self.visitChildren(ctx)
 
 

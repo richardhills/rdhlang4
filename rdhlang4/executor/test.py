@@ -219,6 +219,16 @@ class TestExecutor(TestCase):
         """)
         self.assertEquals(code.invoke(), 42)
 
+    def test_list_coveriance(self):
+        code = prepare_code("""
+            function() {
+                List<Integer> l = [ 42 ];
+                List<const Any> a = l;
+                return l[0];
+            }
+        """)
+        self.assertEquals(code.invoke(), 42)
+
     def test_python_like_code(self):
         ast = parse("""
             function(Void => Any) {

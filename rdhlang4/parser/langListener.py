@@ -260,6 +260,15 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#toConstTypeModifier.
+    def enterToConstTypeModifier(self, ctx:langParser.ToConstTypeModifierContext):
+        pass
+
+    # Exit a parse tree produced by langParser#toConstTypeModifier.
+    def exitToConstTypeModifier(self, ctx:langParser.ToConstTypeModifierContext):
+        pass
+
+
     # Enter a parse tree produced by langParser#toReturnExpression.
     def enterToReturnExpression(self, ctx:langParser.ToReturnExpressionContext):
         pass
@@ -581,6 +590,15 @@ class langListener(ParseTreeListener):
 
     # Exit a parse tree produced by langParser#anyType.
     def exitAnyType(self, ctx:langParser.AnyTypeContext):
+        pass
+
+
+    # Enter a parse tree produced by langParser#constTypeModifier.
+    def enterConstTypeModifier(self, ctx:langParser.ConstTypeModifierContext):
+        pass
+
+    # Exit a parse tree produced by langParser#constTypeModifier.
+    def exitConstTypeModifier(self, ctx:langParser.ConstTypeModifierContext):
         pass
 
 

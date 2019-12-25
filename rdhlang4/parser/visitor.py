@@ -110,6 +110,14 @@ def function_type(argument, breaks, ctx=None):
         }
     )
 
+def const_modifier_op(type_expression, ctx=None):
+    return Object({
+        "opcode": "merge",
+        "first": type_expression,
+        "second": literal_op({
+            "is_const": True
+        }, ctx)
+    })
 
 def nop():
     return Object({
@@ -725,6 +733,9 @@ class RDHLang4Visitor(langVisitor):
 
     def visitAnyType(self, ctx):
         return type_op("Any")
+
+    def visitConstTypeModifier(self, ctx):
+        return const_modifier_op(self.visit(ctx.expression()))
 
     def visitObjectType(self, ctx):
         properties = {
