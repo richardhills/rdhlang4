@@ -503,13 +503,13 @@ class ListType(Type):
         if not are_common_entries_compatible(self, other, result_cache):
             return False
         if len(self.entry_types) > len(other.entry_types):
-            if not self.is_rev_const:
+            if not self.is_rev_const and not other.wildcard_type.is_const:
                 return False
             for our_type in self.entry_types[len(other.entry_types):]:
                 if not are_bindable(our_type, other.wildcard_type, self.is_rev_const, other.is_rev_const, result_cache):
                     return False
         if len(self.entry_types) < len(other.entry_types):
-            if not other.is_rev_const:
+            if not other.is_rev_const and not self.wildcard_type.is_const:
                 return False
             for other_type in other.entry_types[len(self.entry_types):]:
                 if not are_bindable(self.wildcard_type, other_type, self.is_rev_const, other.is_rev_const, result_cache):

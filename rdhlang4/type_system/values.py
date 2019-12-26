@@ -485,7 +485,7 @@ class ListManager(object):
                     new_type_reference.wildcard_type,
                     other_type_reference.is_rev_const,
                     new_type_reference.is_rev_const,
-                    {}
+                    {}, ignore_void_types=True
                 ):
                     return False
 

@@ -1004,8 +1004,6 @@ class UnboundDereferenceBinder(object):
 
         if expression.get("opcode", MISSING) == "unbound_dereference":
             reference = expression["reference"]
-            if reference == "bam":
-                pass
             of_reference = self.check_context_for_of(reference)
 
             if of_reference:
@@ -1151,9 +1149,9 @@ class PreparedFunction(object):
                 self.break_types[break_mode] = declared_break_type.replace_inferred_types(actual_break_type).visit(RemoveRevConst())
                 continue
             if declared_break_type is MISSING:
-                raise PreparationException("Code {} breaks with {}, but nothing declared".format(break_mode, actual_break_type))
+                raise PreparationException("Code can {} break with {}, but nothing declared".format(break_mode, actual_break_type))
             if not declared_break_type.is_copyable_from(actual_break_type, {}):
-                raise PreparationException("Code {} breaks with {}, but declared {}".format(break_mode, actual_break_type, declared_break_type))
+                raise PreparationException("Code can {} break with {}, but declared {}".format(break_mode, actual_break_type, declared_break_type))
 
         self.break_types = {
             break_mode: declared_break_type
@@ -1221,7 +1219,9 @@ def enforce_application_break_mode_constraints(function):
     exit_break_type = function.break_types.get("exit", None)
     if exit_break_type and not IntegerType().is_copyable_from(exit_break_type, {}):
         raise InvalidApplicationException("Application exits with {}, when Integer is expected".format(exit_break_type))
-
+    exception_break_type = function.break_types.get("exception", None)
+    if exception_break_type and exception_break_type.is_copyable_from(PrepareOpcode.PREPARATION_ERROR.get_type(), {}):
+        raise InvalidApplicationException("Application might exit with preparation error")
 
 def execute(ast):
     executor = PreparedFunction(ast)

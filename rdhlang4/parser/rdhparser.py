@@ -6,7 +6,8 @@ from antlr4.CommonTokenStream import CommonTokenStream
 from antlr4.InputStream import InputStream
 from antlr4.error.ErrorListener import ConsoleErrorListener
 
-from rdhlang4.executor.executor import PreparedFunction
+from rdhlang4.executor.executor import PreparedFunction, \
+    enforce_application_break_mode_constraints
 from rdhlang4.parser.langLexer import langLexer
 from rdhlang4.parser.langParser import langParser
 from rdhlang4.parser.visitor import RDHLang4Visitor, ParseError
@@ -32,9 +33,12 @@ def parse(code, debug=False):
     visitor = RDHLang4Visitor(debug=debug)
     return visitor.visit(ast)
 
-def prepare_code(code, debug=False):
+def prepare_code(code, debug=False, check_application_break_mode_constraints=True):
     ast = parse(code, debug)
 
     if ast and isinstance(ast, dict) and "static" in ast:
-        return PreparedFunction(ast)
+        function = PreparedFunction(ast)
+        if check_application_break_mode_constraints:
+            enforce_application_break_mode_constraints(function)
+        return function
     return ast

@@ -229,6 +229,16 @@ class TestExecutor(TestCase):
         """)
         self.assertEquals(code.invoke(), 42)
 
+    def test_list_tuple_coveriance(self):
+        code = prepare_code("""
+            function() {
+                Tuple<Integer> l = [ 42 ];
+                List<const Integer> a = l;
+                return l[0];
+            }
+        """)
+        self.assertEquals(code.invoke(), 42)
+
     def test_python_like_code(self):
         ast = parse("""
             function(Void => Any) {
@@ -496,7 +506,7 @@ class TestMiscelaneous(TestCase):
             function.invoke()
 
     def test4(self):
-        function = prepare_code("""foo = function(Void => Integer) {};""");
+        function = prepare_code("""foo = function(Void => Integer) {};""", check_application_break_mode_constraints=False);
 
         expected = merge_types([
             PrepareOpcode.PREPARATION_ERROR.get_type(),
@@ -509,7 +519,7 @@ class TestMiscelaneous(TestCase):
             function.invoke()
  
     def test5(self):
-        function = prepare_code("""foo = function(Void => Integer) {}; foo();""")
+        function = prepare_code("""foo = function(Void => Integer) {}; foo();""", check_application_break_mode_constraints=False)
 
         expected = merge_types([
             PrepareOpcode.PREPARATION_ERROR.get_type(),
@@ -525,7 +535,7 @@ class TestMiscelaneous(TestCase):
             function.invoke()
 
     def test6(self):
-        function = prepare_code("""foo = function(Void => Integer) { return "hello"; }; foo();""")
+        function = prepare_code("""foo = function(Void => Integer) { return "hello"; }; foo();""", check_application_break_mode_constraints=False)
 
         expected = merge_types([
             PrepareOpcode.PREPARATION_ERROR.get_type(),
@@ -576,7 +586,7 @@ class TestMiscelaneous(TestCase):
                 return bar;
             };
             bam();
-        """)
+        """, check_application_break_mode_constraints=False)
         expected = merge_types([
             PrepareOpcode.PREPARATION_ERROR.get_type(),
             JumpOpcode.INVALID_ARGUMENT.get_type(),
