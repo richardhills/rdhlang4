@@ -388,9 +388,6 @@ class AssignmentOpcode(Opcode):
         self.rvalue = enrich_opcode(data["rvalue"], visitor)
 
     def get_break_types(self, context):
-        if not isinstance(get_expression_break_types(self.dereference, context, MISSING)[0], Type):
-            import pydevd
-            pydevd.settrace()
         dereference_type, dereference_break_types = get_expression_break_types(self.dereference, context, MISSING)
         rvalue_type, rvalue_break_types = get_expression_break_types(self.rvalue, context, MISSING)
         break_types = [

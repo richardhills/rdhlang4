@@ -389,33 +389,43 @@ class TestCompileTimeListChecks(TestCase):
         foo = ListType([], AnyType(), False)
         other_foo = ListType([ IntegerType(), StringType() ], VoidType(), True)
 
+        # Allowed because other_foo is rev const, so foo[0] = "hello" wont break it
         self.assertTrue(foo.is_copyable_from(other_foo, {}))
 
     def test_failed_incompatible_type_compile_time_tuple_to_list_assignment(self):
         foo = ListType([], IntegerType(), False)
         other_foo = ListType([ IntegerType(), StringType() ], VoidType(), True)
 
+        # Blocked because it would allow foo[1] = 42
         self.assertFalse(foo.is_copyable_from(other_foo, {}))
 
     def test_successful_type_compile_time_same_type_tuple_to_list_assignment(self):
         foo = ListType([], IntegerType(), False)
-        other_foo = ListType([ IntegerType(), IntegerType() ], VoidType(), True)
-
-        # Allowed because operations on foo don't break other_foo, and other_foo is rev_const
-        self.assertTrue(foo.is_copyable_from(other_foo, {}))
-
-    def test_failed_incompatible_type_compile_time_same_type_tuple_to_list_assignment(self):
-        foo = ListType([], IntegerType(), False)
         other_foo = ListType([ IntegerType(), IntegerType() ], VoidType(), False)
 
-        # Blocked because foo.push(123) might corrupot other_foo
-        self.assertFalse(foo.is_copyable_from(other_foo, {}))
+        # Allowed because foo.add(1) wont break the rev_const other_foo
+        self.assertTrue(foo.is_copyable_from(other_foo, {}))
 
     def test_failed_incompatible_type_list_to_tuple_assignment(self):
         foo = ListType([IntegerType(), IntegerType(), IntegerType()], IntegerType(), False)
         other_foo = ListType([], IntegerType(), False)
 
         # Blocked because other_foo[0] might fail, but foo[0] can not
+        self.assertFalse(foo.is_copyable_from(other_foo, {}))
+
+    def test_successful_truncated_tuple(self):
+        foo = ListType([IntegerType()], VoidType(), False)
+        other_foo = ListType([IntegerType(), IntegerType(), IntegerType()], VoidType(), False)
+
+        # Allowed because foo.add, foo.slice etc can be blocked on tuples, and
+        # other_foo provides more than enough values for foo
+        self.assertTrue(foo.is_copyable_from(other_foo, {}))
+
+    def test_failed_truncated_tuple(self):
+        foo = ListType([IntegerType(), IntegerType(), IntegerType()], VoidType(), False)
+        other_foo = ListType([IntegerType()], VoidType(), False)
+
+        # Blocked because other_foo can't set a value for foo[1]
         self.assertFalse(foo.is_copyable_from(other_foo, {}))
 
 
@@ -918,11 +928,12 @@ class TestRuntimeListTypeCastingChecks(TestCase):
 
         get_manager(foo).create_reference(ListType([ AnyType(), AnyType(), AnyType() ], VoidType(), False), False)
 
-    def test_failed_integer_list_create_reference(self):
-        foo = List([5, 3, 7])
-
-        with self.assertRaises(CreateReferenceError):
-            get_manager(foo).create_reference(ListType([ AnyType() ], VoidType(), False), False)
+#     def test_failed_integer_list_create_reference(self):
+#        No way at the moment to say "don't accept extra entry types"
+#         foo = List([5, 3, 7])
+# 
+#         with self.assertRaises(CreateReferenceError):
+#             get_manager(foo).create_reference(ListType([ AnyType() ], VoidType(), False), False)
 
     def test_failed_integer_list_create_reference2(self):
         foo = List([5, 3, 7])

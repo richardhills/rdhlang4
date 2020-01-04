@@ -5,10 +5,10 @@ from __future__ import unicode_literals
 import threading
 
 from rdhlang4.exception_types import DataIntegrityError, CrystalValueCanNotBeGenerated
-from rdhlang4.utils import MISSING, RecursiveHelper, InternalMarker
+from rdhlang4.utils import MISSING, InternalMarker
 
 
-def are_bindable(first, second, first_is_rev_const, second_is_rev_const, result_cache, ignore_void_types=False):
+def are_bindable(first, second, first_is_rev_const, second_is_rev_const, result_cache):
     """
     Returns True if a name of type self and another name of type other can be bound together.
 
@@ -31,12 +31,20 @@ def are_bindable(first, second, first_is_rev_const, second_is_rev_const, result_
     if first is second:
         return True
 
-    if not first.is_const and not second_is_rev_const and not (isinstance(first, VoidType) and ignore_void_types):
+    first_might_change = not first.is_const
+    okay_for_second_to_be_changed_by_first = second_is_rev_const
+
+    if first_might_change and not okay_for_second_to_be_changed_by_first:
         if not second.is_copyable_from(first, result_cache):
             return False
-    if not second.is_const and not first_is_rev_const and not (isinstance(second, VoidType) and ignore_void_types):
+
+    second_might_change = not second.is_const
+    okay_for_first_to_be_changed_by_second = first_is_rev_const
+
+    if second_might_change and not okay_for_first_to_be_changed_by_second:
         if not first.is_copyable_from(second, result_cache):
             return False
+
     return True
 
 def are_break_types_equal(first, second):
@@ -311,23 +319,102 @@ class OneOfType(Type):
     def __repr__(self):
         return "OneOfType<{}>".format(", ".join(repr(t) for t in self.types))
 
+def compare_composite_types(first, second, first_subset_of_second, second_subset_of_first, result_cache):
+    if type(first) != type(second):
+        return False
 
-def are_common_properties_compatible(first, second, result_cache):
     if first is second:
         return True
 
-    for property_name in set(first.property_types.keys()) & set(second.property_types.keys()):
+    first_id = id(first)
+    second_id = id(second)
+    result_lookup = (first_id, second_id)
+
+    cached_result = result_cache.get(result_lookup, MISSING)
+    if cached_result is not MISSING:
+        return cached_result
+
+    result_cache[result_lookup] = True
+    result_cache[result_lookup] = uncached_compare_composite_types(first, second, first_subset_of_second, second_subset_of_first, result_cache)
+    return result_cache[result_lookup]
+
+def uncached_compare_composite_types(first, second, first_subset_of_second, second_subset_of_first, result_cache):
+    first_keys = set(first.get_keys())
+    second_keys = set(second.get_keys())
+
+    only_in_first = first_keys - second_keys
+    only_in_second = second_keys - first_keys
+    in_both = first_keys & second_keys
+
+    if first_subset_of_second and len(only_in_first) > 0:
+        return False
+    if second_subset_of_first and len(only_in_second) > 0:
+        return False
+
+    for key_in_both in in_both:
+        first_key_type = first.get_key_type(key_in_both)
+        second_key_type = second.get_key_type(key_in_both)
+
         if not are_bindable(
-            first.property_types[property_name],
-            second.property_types[property_name],
+            first_key_type,
+            second_key_type,
             first.is_rev_const,
             second.is_rev_const,
             result_cache
         ):
             return False
+
+    if not isinstance(first.wildcard_type, VoidType):
+        for second_key in only_in_second:
+            second_key_type = second.get_key_type(second_key)
+            if not are_bindable(
+                first.wildcard_type,
+                second_key_type,
+                first.is_rev_const,
+                second.is_rev_const,
+                result_cache
+            ):
+                return False
+
+    if not isinstance(second.wildcard_type, VoidType):
+        for first_key in only_in_first:
+            first_key_type = first.get_key_type(first_key)
+            if not are_bindable(
+                first_key_type,
+                second.wildcard_type,
+                first.is_rev_const,
+                second.is_rev_const,
+                result_cache
+            ):
+                return False
+
+    if not isinstance(first.wildcard_type, VoidType) and not isinstance(second.wildcard_type, VoidType):
+        if not are_bindable(
+            first.wildcard_type,
+            second.wildcard_type,
+            first.is_rev_const,
+            second.is_rev_const,
+            result_cache
+        ):
+            return False
+
     return True
 
-class ObjectType(Type):
+class CompositeType(Type):
+    def get_keys(self):
+        raise NotImplementedError()
+
+    def get_key_type(self, key):
+        raise NotImplementedError()
+
+    def get_keys_and_types(self):
+        raise NotImplementedError()
+
+    def is_copyable_from(self, other, result_cache):
+        return compare_composite_types(self, other, True, False, result_cache)
+
+class ObjectType(CompositeType):
+    wildcard_type = VoidType()
 
     def __init__(self, property_types, is_rev_const, *args, **kwargs):
         super(ObjectType, self).__init__(*args, **kwargs)
@@ -340,34 +427,18 @@ class ObjectType(Type):
             if not isinstance(property_type, Type):
                 raise DataIntegrityError("property_type {} is type {} and not a Type".format(str(property_type), type(property_type)))
 
+    def get_keys(self):
+        return self.property_types
+
+    def get_key_type(self, key):
+        return self.property_types.get(key, self.wildcard_type)
+
+    def get_keys_and_types(self):
+        return self.property_types.items()
+
     @property
     def property_types(self):
         return self._property_types
-
-    def is_copyable_from(self, other, result_cache):
-        if self is other:
-            return True
-        if not isinstance(other, ObjectType):
-            return False
-
-        our_id = id(self)
-        other_id = id(other)
-        result_lookup = (our_id, other_id)
-
-        cached_result = result_cache.get(result_lookup, MISSING)
-        if cached_result is not MISSING:
-            return cached_result
-
-        result_cache[result_lookup] = True
-
-        if not are_common_properties_compatible(self, other, result_cache):
-            result_cache[result_lookup] = False
-            return False
-        if set(self.property_types.keys()) - set(other.property_types.keys()) != set():
-            result_cache[result_lookup] = False
-            return False
-        result_cache[result_lookup] = True
-        return True
 
     def visit(self, visitor, key=None, obj=None):
         enter_value = visitor.enter(self, key=key, obj=obj)
@@ -472,18 +543,7 @@ class RemoveRevConst(object):
 
         return self.results[id(original_type)]
 
-def are_common_entries_compatible(first, second, result_cache):
-    if first is second:
-        return True
-
-    for first_entry_type, second_entry_type in zip(first.entry_types, second.entry_types):
-        if not are_bindable(first_entry_type, second_entry_type, first.is_rev_const, second.is_rev_const, result_cache):
-            return False
-
-    return True
-
-
-class ListType(Type):
+class ListType(CompositeType):
     def __init__(self, entry_types, wildcard_type, is_rev_const, *args, **kwargs):
         super(ListType, self).__init__(*args, **kwargs)
         # [ IntegerType, StringType ... ]
@@ -497,26 +557,17 @@ class ListType(Type):
         if not isinstance(self.wildcard_type, Type):
             raise DataIntegrityError()
 
-    def is_copyable_from(self, other, result_cache):
-        if not isinstance(other, ListType):
-            return False
-        if not are_common_entries_compatible(self, other, result_cache):
-            return False
-        if len(self.entry_types) > len(other.entry_types):
-            if not self.is_rev_const and not other.wildcard_type.is_const:
-                return False
-            for our_type in self.entry_types[len(other.entry_types):]:
-                if not are_bindable(our_type, other.wildcard_type, self.is_rev_const, other.is_rev_const, result_cache):
-                    return False
-        if len(self.entry_types) < len(other.entry_types):
-            if not other.is_rev_const and not self.wildcard_type.is_const:
-                return False
-            for other_type in other.entry_types[len(self.entry_types):]:
-                if not are_bindable(self.wildcard_type, other_type, self.is_rev_const, other.is_rev_const, result_cache):
-                    return False
-        if not are_bindable(self.wildcard_type, other.wildcard_type, self.is_rev_const, other.is_rev_const, result_cache, ignore_void_types=True):
-            return False
-        return True
+    def get_keys(self):
+        return list(range(len(self.entry_types)))
+
+    def get_key_type(self, key):
+        if key < len(self.entry_types):
+            return self.entry_types[key]
+        else:
+            return self.wildcard_type
+
+    def get_keys_and_types(self):
+        return list(enumerate(self.entry_types))
 
     def visit(self, visitor, key=None, obj=None):
         enter_value = visitor.enter(self, key=key, obj=obj)

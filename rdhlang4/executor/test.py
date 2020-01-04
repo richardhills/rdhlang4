@@ -513,7 +513,7 @@ class TestMiscelaneous(TestCase):
             DynamicDereferenceOpcode.INVALID_DEREFERENCE.get_type(),
         ])
 
-        self.assertTrue(expected.is_copyable_from(function.break_types["exception"], {}))
+        self.assertTrue(function.break_types["exception"].is_copyable_from(expected, {}))
 
         with self.assertRaises(BreakException):
             function.invoke()
@@ -529,7 +529,7 @@ class TestMiscelaneous(TestCase):
             DynamicDereferenceOpcode.INVALID_DEREFERENCE.get_type()
         ])
 
-        self.assertTrue(expected.is_copyable_from(function.break_types["exception"], {}))
+        self.assertTrue(function.break_types["exception"].is_copyable_from(expected, {}))
 
         with self.assertRaises(BreakException):
             function.invoke()
@@ -545,7 +545,7 @@ class TestMiscelaneous(TestCase):
             DynamicDereferenceOpcode.INVALID_DEREFERENCE.get_type()
         ])
 
-        self.assertTrue(expected.is_copyable_from(function.break_types["exception"], {}))
+        self.assertTrue(function.break_types["exception"].is_copyable_from(expected, {}))
 
         with self.assertRaises(BreakException):
             function.invoke()
@@ -594,7 +594,7 @@ class TestMiscelaneous(TestCase):
             JumpOpcode.UNKNOWN_BREAK_MODE.get_type(),
             DynamicDereferenceOpcode.INVALID_DEREFERENCE.get_type()
         ])
-        self.assertTrue(expected.is_copyable_from(function.break_types["exception"], {}))
+        self.assertTrue(function.break_types["exception"].is_copyable_from(expected, {}))
         with self.assertRaises(BreakException):
             function.invoke()
 

@@ -11,11 +11,10 @@ from munch import Munch
 
 from rdhlang4.exception_types import DataIntegrityError, IncompatableAssignmentError, \
     CreateReferenceError, FatalException
-from rdhlang4.type_system.core_types import UnitType, ObjectType, VoidType, AnyType, are_bindable, \
-    are_common_properties_compatible, ListType, are_common_entries_compatible, \
-    PythonFunction, UnknownType, Type, VISIT_CHILDREN, CREATE_NEW_TYPE
-from rdhlang4.utils import NO_VALUE, MISSING, RecursiveHelper, \
-    RecursiveEntryPoint
+from rdhlang4.type_system.core_types import Type, VISIT_CHILDREN, ObjectType, \
+    ListType, UnknownType, UnitType, PythonFunction, VoidType, CREATE_NEW_TYPE, \
+    AnyType, are_bindable, compare_composite_types, CompositeType
+from rdhlang4.utils import MISSING, NO_VALUE
 
 
 class ManagerCache(object):
@@ -175,63 +174,6 @@ class CrystalTypeCreator(object):
         }
 
 
-create_crystal_type_thread_local = threading.local()
-
-# @RecursiveEntryPoint(create_crystal_type_thread_local)
-# def create_crystal_type(value, set_is_rev_const, mask_type=None, lazy_object_types=False):
-#     result = nested_create_crystal_type(value, set_is_rev_const, mask_type=mask_type, lazy_object_types=lazy_object_types)
-#     return replace_recursive_entries(result)
-# 
-# 
-# @RecursiveHelper(RecursiveEntry, create_crystal_type_thread_local, RecursiveEntry.bind)
-# def nested_create_crystal_type(value, set_is_rev_const, mask_type=None, lazy_object_types=False):
-#     try:
-#         from rdhlang4.executor.executor import PreparedFunction
-# 
-#         if not isinstance(mask_type, ObjectType):
-#             mask_type = None
-# 
-#         if is_unknown_type(value):
-#             return UnknownType()
-#         if isinstance(value, (int, float, bool, str)):
-#             return UnitType(value)
-#         if callable(value):
-#             return PythonFunction(value)
-#         if isinstance(value, PreparedFunction):
-#             return value.get_type()
-#         if value == NO_VALUE:
-#             return VoidType()
-#         if value == None:
-#             return UnitType(None)
-#         if isinstance(value, list):
-#             result = ListType([
-#                 nested_create_crystal_type(p, set_is_rev_const) for p in value
-#             ], VoidType(), set_is_rev_const)
-#             result.original_value_id = id(value)
-#             return result
-#         if isinstance(value, tuple):
-#             result = ListType([
-#                 nested_create_crystal_type(p, set_is_rev_const) for p in value
-#             ], VoidType(), set_is_rev_const)
-#             result.original_value_id = id(value)
-#             return result
-#         if isinstance(value, dict):
-#             if lazy_object_types:
-#                 return LazyCrystalObjectType(value)
-#             else:
-#                 return create_object_type_from_dict(value, set_is_rev_const, mask_type)
-#         if hasattr(value, "__dict__"):
-#             if lazy_object_types:
-#                 return LazyCrystalObjectType(value.__dict__)
-#             else:
-#                 return create_object_type_from_dict(value.__dict__, set_is_rev_const, mask_type)
-#     except DataIntegrityError as e:
-#         raise
-# 
-#     return UnknownType()
-# #    raise DataIntegrityError("Unknown value {} {}".format(type(value), value))
-
-
 class LazyCrystalObjectType(ObjectType):
 
     def __init__(self, value_dict, *args, **kwargs):
@@ -308,15 +250,95 @@ class Object(Munch):
         super(Object, self).__init__(properties_and_values)
         get_manager(self)
 
-
-class ObjectManager(object):
+class CompositeManager(object):
+    type = None
 
     def __init__(self, obj):
-        self.obj = obj
         self.type_references = []
-        if hasattr(obj, "wrapped"):
-            raise ValueError()
+        self.obj = obj
+
+    def get_type_references(self):
+        for r in self.type_references:
+            if callable(r):
+                r = r()
+            if r:
+                yield r
+
+    def store_reference(self, new_type_reference, use_weak_ref):
+        if use_weak_ref:
+            new_type_reference = weakref.ref(new_type_reference)
+        self.type_references.append(new_type_reference)
+
+    def create_reference(self, new_type_reference, use_weak_ref):
+        if self.is_new_type_reference_legal(new_type_reference):
+            if isinstance(new_type_reference, (ObjectType, ListType)):
+                self.create_reference_on_all_child_references(new_type_reference)
+            self.store_reference(new_type_reference, use_weak_ref)
+        else:
+            raise CreateReferenceError()
+
+    def is_new_type_reference_legal(self, new_type_reference):
+        if isinstance(new_type_reference, AnyType):
+            return True
+        if not isinstance(new_type_reference, self.type):
+            return False
+
+        if new_type_reference.is_rev_const:
+            raise FatalException()
+
+        current_value_type = create_crystal_type(self.obj, True, mask_type=new_type_reference)
+        if not are_bindable(new_type_reference, current_value_type, False, True, {}):
+            return False
+
+        for other_type_reference in self.get_type_references():
+            if not compare_composite_types(
+                new_type_reference,
+                other_type_reference,
+                False,
+                False,
+                {}
+            ):
+                return False
+
+        return True
+
+    def check_assignment(self, key, new_value):
+        new_value_crystal_type = create_crystal_type(new_value, True)
+        for other_type_reference in self.get_type_references():
+            if isinstance(other_type_reference, CompositeType):
+                other_key_type = other_type_reference.get_key_type(key)
+
+                if isinstance(other_key_type, VoidType):
+                    continue
+
+                if not other_key_type.is_copyable_from(new_value_crystal_type, {}):
+                    raise IncompatableAssignmentError()
+
+                if isinstance(other_key_type, CompositeType):
+                    try:
+                        get_manager(new_value).create_reference(other_key_type, True)
+                    except CreateReferenceError:
+                        raise IncompatableAssignmentError()
+
+    def create_reference_on_all_child_references(self, new_type_reference):
+        for new_key_name, new_key_type in new_type_reference.get_keys_and_types():
+            # Identify whether the reference is to an object that also needs constraining with create_reference
+            our_property_value = self.get_key_value(new_key_name)
+            if isinstance(new_key_type, (ListType, ObjectType)):
+                get_manager(our_property_value).create_reference(new_key_type, True)
+
+    def get_key_value(self, key):
+        raise NotImplementedError(self)
+
+class ObjectManager(CompositeManager):
+    type = ObjectType
+
+    def __init__(self, obj):
         obj.__class__ = self.create_new_managed_type(obj.__class__)
+        super(ObjectManager, self).__init__(obj)
+
+    def get_key_value(self, key):
+        return getattr(self.obj, key, MISSING)
 
     def create_new_managed_type(self, cls):
         object_manager = self
@@ -331,75 +353,18 @@ class ObjectManager(object):
 
         return type(cls.__name__, (cls,), { "__setattr__": new_setattr })
 
-    def get_type_references(self):
-        for r in self.type_references:
-            if callable(r):
-                r = r()
-            if r:
-                yield r
-
-    def check_assignment(self, property_name, new_value):
-        new_value_property_type = create_crystal_type(new_value, True)
-        for other_type_reference in self.get_type_references():
-            if isinstance(other_type_reference, ObjectType):
-                other_property_type = other_type_reference.property_types.get(property_name, MISSING)
-                if other_property_type is MISSING:
-                    continue
-
-                if not other_property_type.is_copyable_from(new_value_property_type, {}):
-                    raise IncompatableAssignmentError()
-
-                if isinstance(other_property_type, ObjectType):
-                    try:
-                        get_manager(new_value).create_reference(other_property_type, True)
-                    except CreateReferenceError:
-                        raise IncompatableAssignmentError()
-
-    def is_new_type_reference_legal(self, new_type_reference):
-        if isinstance(new_type_reference, AnyType):
-            return True
-        if not isinstance(new_type_reference, ObjectType):
-            return False
-
-        if new_type_reference.is_rev_const:
-            raise FatalException()
-
-        current_value_type = create_crystal_type(self.obj, True, mask_type=new_type_reference)
-        if not are_bindable(new_type_reference, current_value_type, False, True, {}):
-            return False
-
-        for other_type_reference in self.get_type_references():
-            if isinstance(other_type_reference, ObjectType):
-                if not are_common_properties_compatible(new_type_reference, other_type_reference, {}):
-                    return False
-        return True
-
-    def create_reference_on_all_child_references(self, new_type_reference):
-        for new_property_name, new_property_type in new_type_reference.property_types.items():
-            # Identify whether the reference is to an object that also needs constraining with create_reference
-            our_property_value = getattr(self.obj, new_property_name, MISSING)
-            if isinstance(new_property_type, (ListType, ObjectType)):
-                get_manager(our_property_value).create_reference(new_property_type, True)
-
-    def store_reference(self, new_type_reference, use_weak_ref):
-        if use_weak_ref:
-            new_type_reference = weakref.ref(new_type_reference)
-        self.type_references.append(new_type_reference)
-
-    def create_reference(self, new_type_reference, use_weak_ref):
-        if self.is_new_type_reference_legal(new_type_reference):
-            if isinstance(new_type_reference, ObjectType):
-                self.create_reference_on_all_child_references(new_type_reference)
-            self.store_reference(new_type_reference, use_weak_ref)
-        else:
-            raise CreateReferenceError()
-
 
 class List(MutableSequence):
     def __init__(self, values, *args, **kwargs):
         super(List, self).__init__(*args, **kwargs)
         self.wrapped = list(values)
         get_manager(self)
+
+    def get_key_value(self, key):
+        if len(self.wrapped) > key:
+            return self.wrapped[key]
+        else:
+            return MISSING
 
     def __len__(self):
         return len(self.wrapped)
@@ -411,13 +376,11 @@ class List(MutableSequence):
         del self.wrapped[i]
 
     def __setitem__(self, i, v):
-        if not get_manager(self).check_assignment(i, v):
-            raise IncompatableAssignmentError()
+        get_manager(self).check_assignment(i, v)
         self.wrapped[i] = v
 
     def insert(self, i, v):
-        if not get_manager(self).check_assignment(i, v):
-            raise IncompatableAssignmentError()
+        get_manager(self).check_assignment(i, v)
         self.wrapped.insert(i, v)
 
     def __eq__(self, other):
@@ -425,88 +388,11 @@ class List(MutableSequence):
             return False
         return self.wrapped == other.wrapped
 
-class ListManager(object):
+class ListManager(CompositeManager):
+    type = ListType
 
-    def __init__(self, list):
-        self.list = list
-        self.type_references = []
-
-    def get_type_references(self):
-        for r in self.type_references:
-            if callable(r):
-                r = r()
-            if r:
-                yield r
-
-    def check_assignment(self, index, new_value):
-        new_value_type = create_crystal_type(new_value, True)
-
-        for other_type_reference in self.get_type_references():
-            if isinstance(other_type_reference, ListType):
-                if len(other_type_reference.entry_types) >= index:
-                    entry_type = other_type_reference.entry_types[index]
-                else:
-                    entry_type = other_type_reference.wildcard_type
-
-                if not entry_type.is_copyable_from(new_value_type, {}):
-                    return False
-
-        return True
-
-    def is_new_type_reference_legal(self, new_type_reference):
-        if isinstance(new_type_reference, AnyType):
-            return True
-        if not isinstance(new_type_reference, ListType):
-            return False
-
-        if new_type_reference.is_rev_const:
-            raise FatalException()
-
-        current_value_type = create_crystal_type(self.list, True, new_type_reference)
-        if not are_bindable(new_type_reference, current_value_type, False, True, {}):
-            return False
-
-        for other_type_reference in self.get_type_references():
-            if isinstance(other_type_reference, ListType):
-                if not are_common_entries_compatible(new_type_reference, other_type_reference, {}):
-                    return False
-
-                if len(other_type_reference.entry_types) > len(new_type_reference.entry_types):
-                    for other_type in other_type_reference.entry_types[len(new_type_reference.entry_types):]:
-                        if not are_bindable(other_type, new_type_reference.wildcard_type, other_type_reference.is_rev_const, new_type_reference.is_rev_const, {}):
-                            return False
-                if len(other_type_reference.entry_types) < len(new_type_reference.entry_types):
-                    for new_type in new_type_reference.entry_types[len(other_type_reference.entry_types):]:
-                        if not are_bindable(new_type, other_type_reference.wildcard_type, new_type_reference.is_rev_const, other_type_reference.is_rev_const, {}):
-                            return False
-
-                if not are_bindable(
-                    other_type_reference.wildcard_type,
-                    new_type_reference.wildcard_type,
-                    other_type_reference.is_rev_const,
-                    new_type_reference.is_rev_const,
-                    {}, ignore_void_types=True
-                ):
-                    return False
-
-        return True
-
-    def create_reference_on_all_child_references(self, new_type_reference):
-        for index, new_entry_type in enumerate(new_type_reference.entry_types):
-            # Identify whether the reference is to a thing that also needs constraining with create_reference
-            our_property_value = self.list[index]
-            if isinstance(our_property_value, (Object, List)):
-                get_manager(our_property_value).create_reference(new_entry_type, True)
-
-    def store_reference(self, new_type_reference, use_weak_ref):
-        if use_weak_ref:
-            new_type_reference = weakref.ref(new_type_reference)
-        self.type_references.append(new_type_reference)
-
-    def create_reference(self, new_type_reference, use_weak_ref):
-        if self.is_new_type_reference_legal(new_type_reference):
-            if isinstance(new_type_reference, ListType):
-                self.create_reference_on_all_child_references(new_type_reference)
-            self.store_reference(new_type_reference, use_weak_ref)
+    def get_key_value(self, key):
+        if key < len(self.obj):
+            return self.obj[key]
         else:
-            raise CreateReferenceError()
+            return MISSING
