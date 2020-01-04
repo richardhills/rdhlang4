@@ -360,12 +360,6 @@ class List(MutableSequence):
         self.wrapped = list(values)
         get_manager(self)
 
-    def get_key_value(self, key):
-        if len(self.wrapped) > key:
-            return self.wrapped[key]
-        else:
-            return MISSING
-
     def __len__(self):
         return len(self.wrapped)
 
