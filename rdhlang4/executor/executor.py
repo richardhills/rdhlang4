@@ -10,7 +10,8 @@ import requests
 from rdhlang4.exception_types import FatalException, PreparationException, \
     IncompatableAssignmentError, CreateReferenceError, \
     InvalidApplicationException, DataIntegrityError, \
-    CrystalValueCanNotBeGenerated
+    CrystalValueCanNotBeGenerated, InvalidDereferenceError, \
+    InvalidCompositeObject
 from rdhlang4.parser.visitor import nop, context_op, literal_op, type_op
 from rdhlang4.type_system.core_types import UnitType, ObjectType, Type, NoValueType, \
     merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
@@ -558,6 +559,79 @@ class MergeOpcode(Opcode):
 
         raise BreakException("value", Object(result))
 
+class SpliceOpcode(Opcode):
+    INVALID_PARAMETERS = TypeErrorFactory("SpliceOpcode: invalid_parameters")
+    INVALID_MODIFICATION = TypeErrorFactory("SpliceOpcode: invalid_modification")
+
+    def __init__(self, data, visitor):
+        super(SpliceOpcode, self).__init__(data)
+        self.list = enrich_opcode(data["list"], visitor)
+        self.start = enrich_opcode(data["start"], visitor)
+        self.delete = enrich_opcode(data["delete"], visitor)
+        self.insert = enrich_opcode(data["insert"], visitor)
+
+    def get_break_types(self, context):
+        break_types = []
+
+        list_value, list_break_types = get_expression_break_types(self.list, context)
+        start_value, start_break_types = get_expression_break_types(self.start, context)
+        delete_value, delete_break_types = get_expression_break_types(self.delete, context)
+        insert_value, insert_break_types = get_expression_break_types(self.insert, context)
+
+        int_type = IntegerType()
+
+        if (not isinstance(list_value, ListType)
+            or not int_type.is_copyable_from(start_value, {})
+            or not int_type.is_copyable_from(delete_value, {})
+            or not isinstance(insert_value, ListType)
+        ):
+            break_types.append({
+                "exception": self.INVALID_PARAMETERS.get_type()
+            })
+
+        break_types.append({
+            "exception": self.INVALID_MODIFICATION.get_type()
+        })
+
+        break_types.extend([
+            list_break_types, start_break_types, delete_break_types, insert_break_types
+        ])
+
+        break_types.append({
+            "value": NoValueType()
+        })
+
+        return merge_break_types(break_types)
+
+    def jump(self, context):
+        list = evaluate(self.list, context)
+        start = evaluate(self.start, context)
+        delete = evaluate(self.delete, context)
+        insert = evaluate(self.insert, context)
+
+        if (not isinstance(start, int)
+            or not isinstance(delete, int)
+            or not isinstance(list, List)
+            or not isinstance(insert, List)
+        ):
+            raise self.INVALID_PARAMETERS()
+
+        if delete < 0:
+            raise self.INVALID_MODIFICATION()
+
+        if start < 0:
+            start = start + len(list)
+
+        if start < 0 or start + delete >= len(list):
+            raise self.INVALID_MODIFICATION()
+
+        for _ in range(delete):
+            list.pop(start)
+
+        for insert_element in reversed(insert):
+            list.insert(start, insert_element)
+
+        raise BreakException("value", NO_VALUE)
 
 def BinaryOpcode(func, result_type, name):
 
@@ -709,15 +783,12 @@ class DereferenceOpcode(Opcode):
 
         reference = evaluate(self.reference, context)
 
-        if hasattr(of, "__dict__") and not isinstance(of, List):
-            if not isinstance(reference, str):
+        if check_reference_exists:
+            try:
+                get_manager(of).get_key_value(reference)
+            except InvalidCompositeObject:
                 raise self.INVALID_DEREFERENCE()
-            if check_reference_exists and not hasattr(of, reference):
-                raise self.INVALID_DEREFERENCE()
-        elif isinstance(of, Iterable):
-            if not isinstance(reference, int):
-                raise self.INVALID_DEREFERENCE()
-            if len(of) <= reference:
+            except InvalidDereferenceError:
                 raise self.INVALID_DEREFERENCE()
 
         return reference, of
@@ -725,12 +796,7 @@ class DereferenceOpcode(Opcode):
     def jump(self, context):
         reference, of = self.get_reference_and_of(context)
 
-        if isinstance(reference, str):
-            value = getattr(of, reference)
-        if isinstance(reference, int):
-            value = of[reference]
-
-        raise BreakException("value", value)
+        raise BreakException("value", get_manager(of).get_key_value(reference))
 
     def __repr__(self):
         return "Dereference< {}.{} >".format(self.of, self.reference)
@@ -785,7 +851,12 @@ class DynamicDereferenceOpcode(Opcode):
     def jump(self, context):
         reference, of = self.get_reference_and_of(context)
 
-        value = getattr(of, reference, MISSING)
+        try:
+            value = get_manager(of).get_key_value(reference)
+        except InvalidCompositeObject:
+            raise self.INVALID_DEREFERENCE()
+        except InvalidDereferenceError:
+            raise self.INVALID_DEREFERENCE()
 
         if value is MISSING:
             raise self.INVALID_DEREFERENCE()
@@ -825,7 +896,8 @@ def get_context_type(context):
                 value_type["local"] = context.types.local
             if hasattr(context.types, "outer"):
                 value_type["outer"] = context.types.outer
-        value_type["static"] = create_crystal_type(context.static, set_is_rev_const=False, lazy_object_types=True)
+        if hasattr(context, "static"):
+            value_type["static"] = create_crystal_type(context.static, set_is_rev_const=False, lazy_object_types=True)
         context._context_type = ObjectType(value_type, False)
     return context._context_type
 
@@ -860,6 +932,7 @@ OPCODES = {
     "new_object": NewObjectOpcode,
     "new_tuple": NewTupleOpcode,
     "merge": MergeOpcode,
+    "splice": SpliceOpcode,
     "dereference": DereferenceOpcode,
     "dynamic_dereference": DynamicDereferenceOpcode,
     "import": ImportOpcode,
@@ -974,20 +1047,20 @@ class UnboundDereferenceBinder(object):
                     "reference": literal_op("local", None),
                     "of": context_opcode
                 })
-            static = getattr(self.context, "static", MISSING)
-            if isinstance(static, Object) and reference in static:
-                return Object({
-                    "opcode": "dereference",
-                    "reference": literal_op("static", None),
-                    "of": context_opcode
-                })
-            outer_context = getattr(self.context, "outer", MISSING)
-            if outer_context is not MISSING:
-                return UnboundDereferenceBinder(outer_context).check_context_for_of(reference, Object({
-                    "opcode": "dereference",
-                    "reference": literal_op("outer", None),
-                    "of": context_opcode
-                }))
+        static = getattr(self.context, "static", MISSING)
+        if isinstance(static, Object) and hasattr(static, reference):
+            return Object({
+                "opcode": "dereference",
+                "reference": literal_op("static", None),
+                "of": context_opcode
+            })
+        outer_context = getattr(self.context, "outer", MISSING)
+        if outer_context is not MISSING:
+            return UnboundDereferenceBinder(outer_context).check_context_for_of(reference, Object({
+                "opcode": "dereference",
+                "reference": literal_op("outer", None),
+                "of": context_opcode
+            }))
 
     def __call__(self, expression):
         if not isinstance(expression, dict):

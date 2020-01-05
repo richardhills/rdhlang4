@@ -34,6 +34,7 @@ literal
    : STRING
    | NUMBER
    | objectLiteral
+   | tupleLiteral
    | functionLiteral
    ;
 
@@ -46,7 +47,11 @@ literalPair
    : SYMBOL ':' literal
    | STRING ':' literal
    ;
-   
+  
+tupleLiteral
+   : '[' literal? (',' literal)* ']'
+   ;
+
 newTuple
    : '[' expression? (',' expression)* ']'
    ;
@@ -200,7 +205,7 @@ fragment SAFECODEPOINT
 
 
 NUMBER
-   : INT ('.' [0-9] +)? EXP?
+   : '-'? INT ('.' [0-9] +)? EXP?
    ;
 
 

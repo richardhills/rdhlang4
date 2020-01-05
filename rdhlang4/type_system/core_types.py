@@ -577,7 +577,7 @@ class ListType(CompositeType):
         return list(range(len(self.entry_types)))
 
     def get_key_type(self, key):
-        if key < len(self.entry_types):
+        if key >= 0 and key < len(self.entry_types):
             return self.entry_types[key]
         else:
             return self.wildcard_type

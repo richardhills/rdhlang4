@@ -11,6 +11,7 @@ from rdhlang4.executor.executor import PreparedFunction, \
 from rdhlang4.parser.langLexer import langLexer
 from rdhlang4.parser.langParser import langParser
 from rdhlang4.parser.visitor import RDHLang4Visitor, ParseError
+from rdhlang4.type_system.values import Object
 from rdhlang4.utils import NO_VALUE
 
 
@@ -34,11 +35,20 @@ def parse(code, debug=False):
     visitor = RDHLang4Visitor(debug=debug)
     return visitor.visit(ast)
 
-def prepare_code(code, debug=False, check_application_break_mode_constraints=True, outer_context=NO_VALUE):
+def prepare_code(code, debug=False, check_application_break_mode_constraints=True, include_stdlib=True):
     ast = parse(code, debug)
 
     if ast and isinstance(ast, dict) and "static" in ast:
-        function = PreparedFunction(ast, outer_context)
+        if include_stdlib:
+            from rdhlang4.executor.stdlib import add_function
+            top_context = Object({
+                "static": Object({
+                    "add": add_function
+                })
+            })
+        else:
+            top_context = NO_VALUE
+        function = PreparedFunction(ast, top_context)
         if check_application_break_mode_constraints:
             enforce_application_break_mode_constraints(function)
         return function

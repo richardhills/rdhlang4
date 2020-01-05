@@ -10,7 +10,8 @@ import weakref
 from munch import Munch
 
 from rdhlang4.exception_types import DataIntegrityError, IncompatableAssignmentError, \
-    CreateReferenceError, FatalException
+    CreateReferenceError, FatalException, InvalidDereferenceError, \
+    InvalidCompositeObject
 from rdhlang4.type_system.core_types import Type, VISIT_CHILDREN, ObjectType, \
     ListType, UnknownType, UnitType, PythonFunction, NoValueType, CREATE_NEW_TYPE, \
     AnyType, are_bindable, compare_composite_types, CompositeType, NoType
@@ -231,6 +232,8 @@ def get_manager(obj):
             manager = ListManager(obj)
         elif hasattr(obj, "__dict__"):
             manager = ObjectManager(obj)
+        else:
+            raise InvalidCompositeObject()
 
         if manager:
             MANAGER_CACHE.add(obj, manager)
@@ -338,6 +341,8 @@ class ObjectManager(CompositeManager):
         super(ObjectManager, self).__init__(obj)
 
     def get_key_value(self, key):
+        if not isinstance(key, str):
+            raise InvalidDereferenceError()
         return getattr(self.obj, key, MISSING)
 
     def create_new_managed_type(self, cls):
@@ -389,6 +394,8 @@ class ListManager(CompositeManager):
     type = ListType
 
     def get_key_value(self, key):
+        if not isinstance(key, int):
+            raise InvalidDereferenceError()
         if key < len(self.obj):
             return self.obj[key]
         else:

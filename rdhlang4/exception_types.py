@@ -16,6 +16,12 @@ class IncompatableAssignmentError(Exception):
     # codes access
     pass
 
+class InvalidDereferenceError(Exception):
+    pass
+
+class InvalidCompositeObject(Exception):
+    pass
+
 class CrystalValueCanNotBeGenerated(Exception):
     pass
 

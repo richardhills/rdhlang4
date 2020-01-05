@@ -74,6 +74,11 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#tupleLiteral.
+    def visitTupleLiteral(self, ctx:langParser.TupleLiteralContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#newTuple.
     def visitNewTuple(self, ctx:langParser.NewTupleContext):
         return self.visitChildren(ctx)

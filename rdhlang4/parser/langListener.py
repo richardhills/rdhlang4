@@ -125,6 +125,15 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#tupleLiteral.
+    def enterTupleLiteral(self, ctx:langParser.TupleLiteralContext):
+        pass
+
+    # Exit a parse tree produced by langParser#tupleLiteral.
+    def exitTupleLiteral(self, ctx:langParser.TupleLiteralContext):
+        pass
+
+
     # Enter a parse tree produced by langParser#newTuple.
     def enterNewTuple(self, ctx:langParser.NewTupleContext):
         pass

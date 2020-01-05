@@ -775,14 +775,15 @@ class TestDynamicFunctions(TestCase):
             string_set_function.invoke(List([ words, "hi" ]))
 
 
-# class TestStdlib(TestCase):
-#     def test_add_function(self):
-#         integer_add_function = add_function.invoke(Object({ "type": "Integer" }))
-#         numbers = List([ 4, 5 ])
-#         get_manager(numbers).create_reference(ListType([], IntegerType(), False), False)
-# 
-#         integer_add_function.invoke(List([ numbers, 42 ]))
-#         print(numbers)
+class TestStdlib(TestCase):
+    def test_add_function(self):
+        code = prepare_code("""
+            List<Integer> foo = [ 38 ];
+            static IntegerArrayAdder = add(Integer);
+            IntegerArrayAdder([ foo, 4 ]);
+            return foo[0] + foo[1];
+        """)
+        self.assertEquals(code.invoke(), 42)
 
 if __name__ == '__main__':
     unittest.main()

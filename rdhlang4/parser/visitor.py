@@ -689,6 +689,9 @@ class RDHLang4Visitor(langVisitor):
             property = ctx.STRING().getText()[1:-1]
         return (property, self.visit(ctx.literal()))
 
+    def visitTupleLiteral(self, ctx):
+        return List([ self.visit(l) for l in ctx.literal() ])
+
     def visitNewTuple(self, ctx):
         expressions = [self.visit(e) for e in ctx.expression()]
 
