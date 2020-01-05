@@ -12,8 +12,8 @@ from munch import Munch
 from rdhlang4.exception_types import DataIntegrityError, IncompatableAssignmentError, \
     CreateReferenceError, FatalException
 from rdhlang4.type_system.core_types import Type, VISIT_CHILDREN, ObjectType, \
-    ListType, UnknownType, UnitType, PythonFunction, VoidType, CREATE_NEW_TYPE, \
-    AnyType, are_bindable, compare_composite_types, CompositeType
+    ListType, UnknownType, UnitType, PythonFunction, NoValueType, CREATE_NEW_TYPE, \
+    AnyType, are_bindable, compare_composite_types, CompositeType, NoType
 from rdhlang4.utils import MISSING, NO_VALUE
 
 
@@ -129,19 +129,19 @@ class CrystalTypeCreator(object):
             if isinstance(value, PreparedFunction):
                 return value.get_type()
             if value is NO_VALUE:
-                return VoidType()
+                return NoValueType()
             if value is None:
                 return UnitType(None)
             if isinstance(value, (list, List)):
                 result = ListType([
                     self.find_or_create_crystal_type(p, None) for p in value
-                ], VoidType(), self.set_is_rev_const)
+                ], NoType(), self.set_is_rev_const)
                 result.original_value_id = id(value)
                 return result
             if isinstance(value, tuple):
                 result = ListType([
                     self.find_or_create_crystal_type(p, None) for p in value
-                ], VoidType(), self.set_is_rev_const)
+                ], NoValueType(), self.set_is_rev_const)
                 result.original_value_id = id(value)
                 return result
             if isinstance(value, dict):
@@ -308,7 +308,7 @@ class CompositeManager(object):
             if isinstance(other_type_reference, CompositeType):
                 other_key_type = other_type_reference.get_key_type(key)
 
-                if isinstance(other_key_type, VoidType):
+                if isinstance(other_key_type, NoType):
                     continue
 
                 if not other_key_type.is_copyable_from(new_value_crystal_type, {}):
@@ -359,6 +359,17 @@ class List(MutableSequence):
         super(List, self).__init__(*args, **kwargs)
         self.wrapped = list(values)
         get_manager(self)
+
+    def get_add_function(self, wildcard_type):
+        context = {
+            "WildcardType": wildcard_type
+        }
+        return prepare_code(
+            """
+                function(WildcardType => Void) {
+                }
+            """, context
+        )
 
     def __len__(self):
         return len(self.wrapped)

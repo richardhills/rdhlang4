@@ -149,7 +149,7 @@ class BooleanType(Type):
 class AnyType(Type):
 
     def is_copyable_from(self, other, result_cache):
-        return not isinstance(other, VoidType)
+        return not isinstance(other, NoValueType)
 
     def to_dict(self):
         return {
@@ -184,18 +184,30 @@ class InferredType(Type):
     def __repr__(self):
         return "InferredType"
 
-class VoidType(Type):
-
+class NoType(Type):
     def is_copyable_from(self, other, result_cache):
-        return isinstance(other, VoidType)
+        return isinstance(other, NoType)
 
     def to_dict(self):
         return {
-            "type": "Void"
+            "type": "NoType"
         }
 
     def __repr__(self):
-        return "VoidType"
+        return "NoType"
+
+class NoValueType(Type):
+
+    def is_copyable_from(self, other, result_cache):
+        return isinstance(other, NoValueType)
+
+    def to_dict(self):
+        return {
+            "type": "NoValueType"
+        }
+
+    def __repr__(self):
+        return "NoValueType"
 
 class UnitType(Type):
 
@@ -266,9 +278,9 @@ def dedupe_types(types):
 
 def merge_types(types):
     types = dedupe_types(flatten_types(types))
-    types = [t for t in types if not isinstance(t, VoidType)]
+    types = [t for t in types if not isinstance(t, (NoType, NoValueType))]
     if len(types) == 0:
-        return VoidType()
+        return NoValueType()
     elif len(types) == 1:
         return types[0]
     else:
@@ -364,7 +376,7 @@ def uncached_compare_composite_types(first, second, first_subset_of_second, seco
         ):
             return False
 
-    if not isinstance(first.wildcard_type, VoidType):
+    if not isinstance(first.wildcard_type, NoType):
         for second_key in only_in_second:
             second_key_type = second.get_key_type(second_key)
             if not are_bindable(
@@ -376,7 +388,7 @@ def uncached_compare_composite_types(first, second, first_subset_of_second, seco
             ):
                 return False
 
-    if not isinstance(second.wildcard_type, VoidType):
+    if not isinstance(second.wildcard_type, NoType):
         for first_key in only_in_first:
             first_key_type = first.get_key_type(first_key)
             if not are_bindable(
@@ -388,7 +400,7 @@ def uncached_compare_composite_types(first, second, first_subset_of_second, seco
             ):
                 return False
 
-    if not isinstance(first.wildcard_type, VoidType) and not isinstance(second.wildcard_type, VoidType):
+    if not isinstance(first.wildcard_type, NoType) and not isinstance(second.wildcard_type, NoType):
         if not are_bindable(
             first.wildcard_type,
             second.wildcard_type,
@@ -414,7 +426,7 @@ class CompositeType(Type):
         return compare_composite_types(self, other, True, False, result_cache)
 
 class ObjectType(CompositeType):
-    wildcard_type = VoidType()
+    wildcard_type = NoType()
 
     def __init__(self, property_types, is_rev_const, *args, **kwargs):
         super(ObjectType, self).__init__(*args, **kwargs)
@@ -550,6 +562,10 @@ class ListType(CompositeType):
         self.entry_types = list(entry_types)
         self.wildcard_type = wildcard_type
         self.is_rev_const = is_rev_const
+
+        if isinstance(wildcard_type, NoValueType):
+            import pydevd
+            pydevd.settrace()
 
         for property_type in self.entry_types:
             if not isinstance(property_type, Type):

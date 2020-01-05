@@ -67,7 +67,7 @@ class TestFunctionParsing(TestCase):
                         "return": type_op("Inferred")
                     }),
                     "local": object_type({}),
-                    "argument": type_op("Void"),
+                    "argument": type_op("NoValue"),
                 }),
                 "local_initializer": new_object_op({}),
                 "code": break_op("return", nop())
@@ -84,7 +84,7 @@ class TestFunctionParsing(TestCase):
                     "return": type_op("Inferred")
                 }),
                 "local": object_type({}),
-                "argument": type_op("Void")
+                "argument": type_op("NoValue")
             }),
             "local_initializer": new_object_op({}),
             "code": assignment_op(
@@ -104,7 +104,7 @@ class TestFunctionParsing(TestCase):
                     "return": type_op("Inferred")
                 }),
                 "local": object_type({}),
-                "argument": type_op("Void")
+                "argument": type_op("NoValue")
             }),
             "local_initializer": new_object_op({}),
             "code": break_op("return", literal_op(42))
@@ -140,7 +140,7 @@ class TestFunctionParsing(TestCase):
                     "return": type_op("Inferred")
                 }),
                 "local": object_type({}),
-                "argument": type_op("Void")
+                "argument": type_op("NoValue")
             }),
             "local_initializer": new_object_op({}),
             "code": binary_op("addition", literal_op(4), literal_op(38))
@@ -158,9 +158,9 @@ class TestLocalVariables(TestCase):
         """)
         CORRECT = {
             "static": new_object_op({
-                "argument": type_op("Void"),
+                "argument": type_op("NoValue"),
                 "breaks": new_object_op({
-                    "return": type_op("Void")
+                    "return": type_op("NoValue")
                 }),
                 "local": object_type({
                     "foo": type_op("Integer")
@@ -182,7 +182,7 @@ class TestLocalVariables(TestCase):
         """)
         CORRECT = {
             "static": new_object_op({
-                "argument": type_op("Void"),
+                "argument": type_op("NoValue"),
                 "breaks": new_object_op({
                     "return": type_op("Integer")
                 }),
@@ -206,9 +206,9 @@ class TestLocalVariables(TestCase):
         """)
         CORRECT = {
             "static": new_object_op({
-                "argument": type_op("Void"),
+                "argument": type_op("NoValue"),
                 "breaks": new_object_op({
-                    "return": type_op("Void")
+                    "return": type_op("NoValue")
                 }),
                 "local": object_type({
                     "foo": type_op("Integer")
@@ -219,7 +219,7 @@ class TestLocalVariables(TestCase):
             }),
             "code": catch_op("function_stub_finished", jump_op(prepare_op(literal_op({
                 "static": new_object_op({
-                    "argument": type_op("Void"),
+                    "argument": type_op("NoValue"),
                     "breaks": new_object_op({
                         "all": type_op("Inferred")
                     }),
@@ -247,9 +247,9 @@ class TestLocalVariables(TestCase):
         """)
         CORRECT = Object({
             "static": new_object_op({
-                "argument": type_op("Void"),
+                "argument": type_op("NoValue"),
                 "breaks": new_object_op({
-                    "return": type_op("Void")
+                    "return": type_op("NoValue")
                 }),
                 "local": object_type({
                     "foo": type_op("Integer")
@@ -265,7 +265,7 @@ class TestLocalVariables(TestCase):
                 ),
                 catch_op("function_stub_finished", jump_op(prepare_op(literal_op({
                     "static": new_object_op({
-                        "argument": type_op("Void"),
+                        "argument": type_op("NoValue"),
                         "breaks": new_object_op({
                             "all": type_op("Inferred")
                         }),
@@ -295,14 +295,14 @@ class TestObjectTypes(TestCase):
         CORRECT = {
             "static": new_object_op({
                 "breaks": new_object_op({
-                    "return": type_op("Void")
+                    "return": type_op("NoValue")
                 }),
                 "local": object_type({
                     "foo": object_type({
                         "bar": type_op("Integer")
                     })
                 }),
-                "argument": type_op("Void")
+                "argument": type_op("NoValue")
             }),
             "local_initializer": new_object_op({
                 "foo": new_object_op({ "bar": literal_op(5) })
@@ -322,7 +322,7 @@ class TestExtraStatic(TestCase):
         CORRECT = {
             "static": new_object_op({
                 "local": object_type({}),
-                "argument": type_op("Void"),
+                "argument": type_op("NoValue"),
                 "breaks": new_object_op({ "return": type_op("Integer"), "exit": type_op("Integer") }),
                 "foo": literal_op(5)
             }),
@@ -349,17 +349,17 @@ class TestNestedFunctions(TestCase):
                 }),
                 "local": object_type({
                     "foo": function_type(
-                        type_op("Void"), {
+                        type_op("NoValue"), {
                             "return": type_op("Integer")
                         }
                     )
                 }),
-                "argument": type_op("Void")
+                "argument": type_op("NoValue")
             }),
             "local_initializer": new_object_op({
                 "foo": prepare_op(literal_op({
                     "static": new_object_op({
-                        "argument": type_op("Void"),
+                        "argument": type_op("NoValue"),
                         "breaks": new_object_op({ "return": type_op("Integer") }),
                         "local": object_type({})
                     }),

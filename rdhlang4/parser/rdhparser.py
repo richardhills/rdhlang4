@@ -11,6 +11,7 @@ from rdhlang4.executor.executor import PreparedFunction, \
 from rdhlang4.parser.langLexer import langLexer
 from rdhlang4.parser.langParser import langParser
 from rdhlang4.parser.visitor import RDHLang4Visitor, ParseError
+from rdhlang4.utils import NO_VALUE
 
 
 class AlwaysFailErrorListener(ConsoleErrorListener):
@@ -33,11 +34,11 @@ def parse(code, debug=False):
     visitor = RDHLang4Visitor(debug=debug)
     return visitor.visit(ast)
 
-def prepare_code(code, debug=False, check_application_break_mode_constraints=True):
+def prepare_code(code, debug=False, check_application_break_mode_constraints=True, outer_context=NO_VALUE):
     ast = parse(code, debug)
 
     if ast and isinstance(ast, dict) and "static" in ast:
-        function = PreparedFunction(ast)
+        function = PreparedFunction(ast, outer_context)
         if check_application_break_mode_constraints:
             enforce_application_break_mode_constraints(function)
         return function

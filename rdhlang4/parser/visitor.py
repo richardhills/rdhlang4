@@ -396,7 +396,7 @@ class FunctionStub(object):
         if self.argument_type_expression is not MISSING:
             statics["argument"] = self.argument_type_expression
         else:
-            statics["argument"] = type_op("Void")
+            statics["argument"] = type_op("NoValue")
 
         if self.local_variable_types is not MISSING:
             statics["local"] = object_type(self.local_variable_types)
@@ -709,7 +709,7 @@ class RDHLang4Visitor(langVisitor):
         return type_op("Inferred", ctx if self.debug else None)
 
     def visitVoidType(self, ctx):
-        return type_op("Void", ctx if self.debug else None)
+        return type_op("NoValue", ctx if self.debug else None)
 
     def visitIntegerType(self, ctx):
         return type_op("Integer", ctx if self.debug else None)
@@ -751,7 +751,7 @@ class RDHLang4Visitor(langVisitor):
     def visitTupleType(self, ctx):
         return list_type([
                 self.visit(e) for e in ctx.expression()
-            ], type_op("Void"), ctx if self.debug else None
+            ], type_op("NoType"), ctx if self.debug else None
         )
 
     def visitPropertyType(self, ctx):
@@ -845,7 +845,7 @@ class RDHLang4Visitor(langVisitor):
             argument_type = self.visit(possible_argument_and_return_type[0])
             return_type = type_op("Inferred")
         else:
-            argument_type = type_op("Void") #one_of_type([ type_op("Void"), type_op("Any") ])
+            argument_type = type_op("NoValue")
             return_type = type_op("Inferred")
 
         return (argument_type, return_type)

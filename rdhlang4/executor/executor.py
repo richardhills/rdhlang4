@@ -12,9 +12,10 @@ from rdhlang4.exception_types import FatalException, PreparationException, \
     InvalidApplicationException, DataIntegrityError, \
     CrystalValueCanNotBeGenerated
 from rdhlang4.parser.visitor import nop, context_op, literal_op, type_op
-from rdhlang4.type_system.core_types import UnitType, ObjectType, Type, VoidType, \
+from rdhlang4.type_system.core_types import UnitType, ObjectType, Type, NoValueType, \
     merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
-    InferredType, OneOfType, ListType, PythonFunction, RemoveRevConst
+    InferredType, OneOfType, ListType, PythonFunction, RemoveRevConst, \
+    CompositeType, NoType
 from rdhlang4.type_system.values import Object, List, \
     get_manager, create_crystal_type
 from rdhlang4.utils import InternalMarker, MISSING, NO_VALUE, spread_dict
@@ -71,7 +72,7 @@ def merge_break_types(breaks_types):
             if not isinstance(type, Type):
                 raise FatalException()
 
-            previous_break_type = result.get(mode, VoidType())
+            previous_break_type = result.get(mode, NoValueType())
             new_break_type = merge_types([previous_break_type, type])
             result[mode] = new_break_type
     return result
@@ -107,7 +108,7 @@ class NopOpcode(Opcode):
 
     def get_break_types(self, context):
         return {
-            "value": VoidType()
+            "value": NoValueType()
         }
 
     def jump(self, context):
@@ -362,7 +363,7 @@ class TransformBreak(Opcode):
                 ])
         else:
             break_types = {
-                self.output: VoidType()
+                self.output: NoValueType()
             }
         return break_types
 
@@ -394,7 +395,7 @@ class AssignmentOpcode(Opcode):
             dereference_break_types, rvalue_break_types
         ]
         if dereference_type is not MISSING and rvalue_type is not MISSING:
-            break_types.append({ "value": VoidType() })
+            break_types.append({ "value": NoValueType() })
         if not isinstance(dereference_type, Type) or not dereference_type.is_copyable_from(rvalue_type, {}):
             break_types.append({
                 "exception": self.INVALID_ASSIGNMENT.get_type(),
@@ -503,7 +504,7 @@ class NewTupleOpcode(Opcode):
 
         return merge_break_types(
             other_breaks_types + [{
-                "value": ListType(value_types, VoidType(), True)
+                "value": ListType(value_types, NoType(), True)
             }]
         )
 
@@ -680,21 +681,11 @@ class DereferenceOpcode(Opcode):
 
         crystal_reference_value = reference_type.get_crystal_value()
 
-        if isinstance(of_type, ObjectType) and isinstance(crystal_reference_value, str):
-            if crystal_reference_value in of_type.property_types:
-                value_type = of_type.property_types[crystal_reference_value]
-            else:
+        if isinstance(of_type, CompositeType):
+            value_type = of_type.get_key_type(crystal_reference_value)
+            if value_type is MISSING:
                 invalid_dereference_possible = True
-                value_type = AnyType()  # TODO wildcard types
-        elif isinstance(of_type, ListType) and isinstance(crystal_reference_value, int):
-            if len(of_type.entry_types) > crystal_reference_value:
-                value_type = of_type.entry_types[crystal_reference_value]
-            else:
-                invalid_dereference_possible = True
-                if not isinstance(of_type.wildcard_type, VoidType):
-                    value_type = of_type.wildcard_type
-                else:
-                    value_type = MISSING
+                value_type = of_type.wildcard_type
         else:
             invalid_dereference_possible = True
             value_type = AnyType()
@@ -824,7 +815,7 @@ def get_context_type(context):
     if not hasattr(context, "_context_type"):
         value_type = {}
         if context is NO_VALUE:
-            return VoidType()
+            return NoValueType()
         if hasattr(context, "types"):
             if hasattr(context.types, "argument"):
                 value_type["argument"] = context.types.argument
@@ -937,7 +928,8 @@ TYPES = {
     ),
     "Integer": lambda data: IntegerType(is_const=get_is_const(data)),
     "Boolean": lambda data: BooleanType(is_const=get_is_const(data)),
-    "Void": lambda data: VoidType(),
+    "NoValue": lambda data: NoValueType(),
+    "NoType": lambda data: NoType(),
     "String": lambda data: StringType(is_const=get_is_const(data)),
     "Function": create_function_type_from_data,
     "Inferred": lambda data: InferredType(is_const=get_is_const(data)),
@@ -1055,7 +1047,7 @@ class PreparedFunction(object):
         if hasattr(self.static, "argument"):
             self.argument_type = enrich_type(self.static.argument)
         else:
-            self.argument_type = VoidType()
+            self.argument_type = NoValueType()
 
         self.with_argument_type_context = Object({
             "static": self.static,
@@ -1078,7 +1070,7 @@ class PreparedFunction(object):
         if hasattr(self.static, "local"):
             self.local_type = enrich_type(self.static.local).replace_inferred_types(local_initializer_type).visit(RemoveRevConst())
         else:
-            self.local_type = VoidType()
+            self.local_type = NoValueType()
 
         local_initializer_assignment_break_types = {}
         if not self.local_type.is_copyable_from(local_initializer_type, {}):
