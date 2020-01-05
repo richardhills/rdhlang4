@@ -422,6 +422,15 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#execute.
+    def enterExecute(self, ctx:langParser.ExecuteContext):
+        pass
+
+    # Exit a parse tree produced by langParser#execute.
+    def exitExecute(self, ctx:langParser.ExecuteContext):
+        pass
+
+
     # Enter a parse tree produced by langParser#gt.
     def enterGt(self, ctx:langParser.GtContext):
         pass

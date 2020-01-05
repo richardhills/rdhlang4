@@ -93,6 +93,24 @@ class TestExecutor(TestCase):
         function = PreparedFunction(ast)
         self.assertEqual(function.invoke(), 42)
 
+    def test_exec(self):
+        function = prepare_code("""
+            function(Void => Integer) {
+                return exec({
+                    "opcode": "addition",
+                    "lvalue": {
+                        "opcode": "literal",
+                        "value": 38
+                    },
+                    "rvalue": {
+                        "opcode": "literal",
+                        "value": 4
+                    }
+                });
+            }
+        """)
+        self.assertEqual(function.invoke(), 42)
+
     def test_invalid_assignment(self):
         ast = parse("""
             function(Void => String) nothrow {
@@ -469,6 +487,7 @@ class TestPreparationErrors(TestCase):
 class TestImport(TestCase):
 
     def test_import(self):
+        raise ValueError()
         function = prepare_code("""
             import requests;
             var response = requests.get({ kwargs: { url: "https://news.bbc.co.uk/" }});

@@ -795,6 +795,10 @@ class RDHLang4Visitor(langVisitor):
             ctx
         )
 
+    def visitExecute(self, ctx):
+        code = self.visit(ctx.literal())
+        return add_debugging(code, ctx)
+
     def visitFunctionLiteral(self, ctx):
         argument_type, return_type = self.visit(ctx.functionArgumentAndReturns())
 

@@ -76,6 +76,7 @@ expression
    | NUMBER                        # number
    | whileLoop                     # toWhileLoop
    | ifBlock                       # toIf
+   | 'exec' '(' literal ')'        # execute
    | functionLiteral               # toFunctionLiteral
    | newObject                     # toNewObject
    | newTuple                      # toNewTuple

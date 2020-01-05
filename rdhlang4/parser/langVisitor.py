@@ -239,6 +239,11 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#execute.
+    def visitExecute(self, ctx:langParser.ExecuteContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#gt.
     def visitGt(self, ctx:langParser.GtContext):
         return self.visitChildren(ctx)
