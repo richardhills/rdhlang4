@@ -77,6 +77,7 @@ expression
    | whileLoop                     # toWhileLoop
    | ifBlock                       # toIf
    | 'exec' '(' literal ')'        # execute
+   | 'dynamic' functionLiteral     # toDynamicFunctionLiteral
    | functionLiteral               # toFunctionLiteral
    | newObject                     # toNewObject
    | newTuple                      # toNewTuple
@@ -169,7 +170,7 @@ functionExits
    ;
 
 returnExpression
-   : 'return' expression
+   : 'return' expression?
    ;
 
 exitExpression

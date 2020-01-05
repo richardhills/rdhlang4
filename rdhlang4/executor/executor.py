@@ -154,6 +154,7 @@ class PrepareOpcode(Opcode):
 
     def __init__(self, data, visitor):
         self.function = enrich_opcode(data["function"], visitor)
+        self.dynamic = data["dynamic"]
         self.function_raw_data = None
         self.other_break_types = None
         self.function_data = None
@@ -161,22 +162,23 @@ class PrepareOpcode(Opcode):
     def get_break_types(self, context):
         self.function_raw_data_type, self.other_break_types = get_expression_break_types(self.function, context, MISSING)
 
+        break_types = [
+            self.other_break_types
+        ]
+
         if not self.function_raw_data_type is MISSING:
             try:
                 self.function_data = self.function_raw_data_type.get_crystal_value()
             except CrystalValueCanNotBeGenerated as e:
                 pass
 
-        break_types = [
-            self.other_break_types
-        ]
-
         function = None
-        try:
-            if self.function_data:
-                function = PreparedFunction(self.function_data, context)
-        except PreparationException:
-            pass
+        if not self.dynamic:
+            try:
+                if self.function_data:
+                    function = PreparedFunction(self.function_data, context)
+            except PreparationException:
+                pass
 
         if function: 
             break_types.append({

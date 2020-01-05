@@ -360,17 +360,6 @@ class List(MutableSequence):
         self.wrapped = list(values)
         get_manager(self)
 
-    def get_add_function(self, wildcard_type):
-        context = {
-            "WildcardType": wildcard_type
-        }
-        return prepare_code(
-            """
-                function(WildcardType => Void) {
-                }
-            """, context
-        )
-
     def __len__(self):
         return len(self.wrapped)
 
@@ -392,6 +381,9 @@ class List(MutableSequence):
         if not isinstance(other, List):
             return False
         return self.wrapped == other.wrapped
+
+    def __repr__(self):
+        return repr(self.wrapped)
 
 class ListManager(CompositeManager):
     type = ListType

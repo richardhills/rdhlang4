@@ -204,6 +204,11 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#toDynamicFunctionLiteral.
+    def visitToDynamicFunctionLiteral(self, ctx:langParser.ToDynamicFunctionLiteralContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#toFunctionLiteral.
     def visitToFunctionLiteral(self, ctx:langParser.ToFunctionLiteralContext):
         return self.visitChildren(ctx)

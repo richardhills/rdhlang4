@@ -9,9 +9,11 @@ from unittest.case import TestCase
 from rdhlang4.executor.executor import PreparedFunction, PreparationException, \
     BreakException, JumpOpcode, DynamicDereferenceOpcode, PrepareOpcode, \
     enforce_application_break_mode_constraints, OPCODES
+from rdhlang4.executor.stdlib import add_function
 from rdhlang4.parser.rdhparser import parse, prepare_code
 from rdhlang4.type_system.core_types import ObjectType, IntegerType, merge_types, \
-    RemoveRevConst, are_break_types_equal
+    RemoveRevConst, are_break_types_equal, ListType, AnyType, StringType
+from rdhlang4.type_system.values import Object, List, get_manager
 from rdhlang4.utils import NO_VALUE
 
 
@@ -487,7 +489,6 @@ class TestPreparationErrors(TestCase):
 class TestImport(TestCase):
 
     def test_import(self):
-        raise ValueError()
         function = prepare_code("""
             import requests;
             var response = requests.get({ kwargs: { url: "https://news.bbc.co.uk/" }});
@@ -712,6 +713,76 @@ class TestEuler(TestCase):
         enforce_application_break_mode_constraints(function)
         self.assertEqual(function.invoke(), 6857)
 
+set_first_list_element = prepare_code("""
+    function(Any) {
+        return dynamic function(Tuple<List<outer.argument>, outer.argument>) nothrow noexit {
+            argument[0][0] = argument[1];
+            return;
+        };
+    }
+""", check_application_break_mode_constraints=False)
+
+broken_argument_set_first_list_element = prepare_code("""
+    function(Any) {
+        return dynamic function(Tuple<List<outer.argument>, Integer>) nothrow noexit {
+            argument[0][0] = argument[1];
+            return;
+        };
+    }
+""", check_application_break_mode_constraints=False)
+
+class TestDynamicFunctions(TestCase):
+    def test_set_element_integer(self):
+        numbers = List([ 4, 5 ])
+        get_manager(numbers).create_reference(ListType([], IntegerType(), False), False)
+
+        integer_set_function = set_first_list_element.invoke(Object({ "type": "Integer" }))
+        integer_set_function.invoke(List([ numbers, 42 ]))
+
+        self.assertEqual(numbers, List([ 42, 5 ]))
+
+    def test_set_element_string(self):
+        words = List([ "hello", "world" ])
+        get_manager(words).create_reference(ListType([], StringType(), False), False)
+
+        string_set_function = set_first_list_element.invoke(Object({ "type": "String" }))
+        string_set_function.invoke(List([ words, "hi" ]))
+
+        self.assertEqual(words, List([ "hi", "world" ]))
+
+    def test_broken_works_with_int_set_element_string(self):
+        numbers = List([ 4, 5 ])
+        get_manager(numbers).create_reference(ListType([], IntegerType(), False), False)
+
+        integer_set_function = set_first_list_element.invoke(Object({ "type": "Integer" }))
+        integer_set_function.invoke(List([ numbers, 42 ]))
+
+        self.assertEqual(numbers, List([ 42, 5 ]))
+
+    def test_broken_set_element_string(self):
+        words = List([ "hello", "world" ])
+        get_manager(words).create_reference(ListType([], StringType(), False), False)
+
+        with self.assertRaises(BreakException):
+            broken_argument_set_first_list_element.invoke(Object({ "type": "String" }))
+
+    def test_other_constraint_breaks_dynamic_function(self):
+        words = List([ "hello", "world" ])
+        get_manager(words).create_reference(ListType([], AnyType(), False), False)
+
+        string_set_function = set_first_list_element.invoke(Object({ "type": "String" }))
+        with self.assertRaises(BreakException):
+            string_set_function.invoke(List([ words, "hi" ]))
+
+
+# class TestStdlib(TestCase):
+#     def test_add_function(self):
+#         integer_add_function = add_function.invoke(Object({ "type": "Integer" }))
+#         numbers = List([ 4, 5 ])
+#         get_manager(numbers).create_reference(ListType([], IntegerType(), False), False)
+# 
+#         integer_add_function.invoke(List([ numbers, 42 ]))
+#         print(numbers)
 
 if __name__ == '__main__':
     unittest.main()

@@ -359,6 +359,15 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#toDynamicFunctionLiteral.
+    def enterToDynamicFunctionLiteral(self, ctx:langParser.ToDynamicFunctionLiteralContext):
+        pass
+
+    # Exit a parse tree produced by langParser#toDynamicFunctionLiteral.
+    def exitToDynamicFunctionLiteral(self, ctx:langParser.ToDynamicFunctionLiteralContext):
+        pass
+
+
     # Enter a parse tree produced by langParser#toFunctionLiteral.
     def enterToFunctionLiteral(self, ctx:langParser.ToFunctionLiteralContext):
         pass

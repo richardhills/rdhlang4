@@ -166,14 +166,18 @@ def jump_op(function_expression, argument_expression, ctx=None):
 
 
 def transform_op(code_expression, ctx=None, input="value", output="value"):
-    if not is_expression(code_expression):
+    if code_expression is not MISSING and not is_expression(code_expression):
         raise InvalidCodeError()
-    return add_debugging(Object({
+    code = {
         "opcode": "transform",
-        "code": code_expression,
-        "input": input,
         "output": output
-    }), ctx)
+    }
+    if code_expression is not MISSING:
+        code = spread_dict(code, {
+            "code": code_expression,
+            "input": input
+        })
+    return add_debugging(Object(code), ctx)
 
 
 def break_op(type, value, ctx=None):
@@ -277,11 +281,12 @@ NO_THROWS = InternalMarker("NO_THROWS")
 
 NO_EXIT = InternalMarker("NO_EXIT")
 
-def prepare_op(function_expression, ctx=None):
+def prepare_op(function_expression, dynamic=False, ctx=None):
     if not is_expression(function_expression):
         raise InvalidCodeError()
     return add_debugging(Object({
         "opcode": "prepare",
+        "dynamic": dynamic,
         "function": function_expression
     }), ctx)
 
@@ -425,7 +430,7 @@ class FunctionStub(object):
             result["code"] = break_op("function_stub_finished", code_expression)
             return catch_op(
                 "function_stub_finished",
-                jump_op(prepare_op(literal_op(result)), nop())
+                jump_op(prepare_op(literal_op(result), False), nop())
             )
 
 class RDHLang4Visitor(langVisitor):
@@ -446,8 +451,18 @@ class RDHLang4Visitor(langVisitor):
     def visitFalse(self, ctx):
         return literal_op(False, ctx if self.debug else None)
 
+    def visitToDynamicFunctionLiteral(self, ctx):
+        return prepare_op(
+            literal_op(self.visit(ctx.functionLiteral()), ctx if self.debug else None),
+            True,
+            ctx if self.debug else None)
+
     def visitToFunctionLiteral(self, ctx):
-        return prepare_op(literal_op(self.visit(ctx.functionLiteral()), ctx if self.debug else None), ctx if self.debug else None)
+        return prepare_op(
+            literal_op(self.visit(ctx.functionLiteral()), ctx if self.debug else None),
+            False,
+            ctx if self.debug else None
+        )
 
     def visitNoParameterFunctionInvocation(self, ctx):
         function_expression = self.visit(ctx.expression())
@@ -700,7 +715,12 @@ class RDHLang4Visitor(langVisitor):
         return assignment_op(dereference, expression, ctx if self.debug else None)
 
     def visitReturnExpression(self, ctx):
-        return transform_op(self.visit(ctx.expression()), ctx if self.debug else None, "value", "return")
+        result = ctx.expression()
+        if result:
+            result = self.visit(result)
+        else:
+            result = MISSING
+        return transform_op(result, ctx if self.debug else None, "value", "return")
 
     def visitExitExpression(self, ctx):
         return transform_op(self.visit(ctx.expression()), ctx if self.debug else None, "value", "exit")
