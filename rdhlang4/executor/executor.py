@@ -160,18 +160,26 @@ class PrepareOpcode(Opcode):
         self.other_break_types = None
         self.function_data = None
 
-    def get_break_types(self, context):
-        self.function_raw_data_type, self.other_break_types = get_expression_break_types(self.function, context, MISSING)
+    def setup_function_data(self, context):
+        if self.function_data:
+            return
 
-        break_types = [
-            self.other_break_types
-        ]
+        self.function_raw_data_type, self.other_break_types = get_expression_break_types(self.function, context, MISSING)
 
         if not self.function_raw_data_type is MISSING:
             try:
                 self.function_data = self.function_raw_data_type.get_crystal_value()
             except CrystalValueCanNotBeGenerated as e:
                 pass
+
+        return self.function_data
+
+    def get_break_types(self, context):
+        self.setup_function_data(context)
+
+        break_types = [
+            self.other_break_types
+        ]
 
         function = None
         if not self.dynamic:
@@ -198,6 +206,7 @@ class PrepareOpcode(Opcode):
 
     def jump(self, context):
         try:
+            self.setup_function_data(context)
             function = PreparedFunction(self.function_data, context)
             raise BreakException("value", function)
         except PreparationException as e:
@@ -213,20 +222,21 @@ class JumpOpcode(Opcode):
     def __init__(self, data, visitor):
         self.function = enrich_opcode(data["function"], visitor)
         self.argument = enrich_opcode(data.get("argument", nop()), visitor)
+        self.function_type = None
 
     def get_break_types(self, context):
-        function_type, function_evaluation_break_types = get_expression_break_types(self.function, context, MISSING)
+        self.function_type, function_evaluation_break_types = get_expression_break_types(self.function, context, MISSING)
         argument_type, argument_break_types = get_expression_break_types(self.argument, context, MISSING)
 
         break_types = [ argument_break_types, function_evaluation_break_types ]
 
-        if isinstance(function_type, FunctionType) and argument_type is not MISSING:
-            break_types.append(function_type.break_types)
-            if not function_type.argument_type.is_copyable_from(argument_type, {}):
+        if isinstance(self.function_type, FunctionType) and argument_type is not MISSING:
+            break_types.append(self.function_type.break_types)
+            if not self.function_type.argument_type.is_copyable_from(argument_type, {}):
                 break_types.append({
                     "exception": self.INVALID_ARGUMENT.get_type()
                 })
-        elif isinstance(function_type, PythonFunction):
+        elif isinstance(self.function_type, PythonFunction):
             break_types.append({
                 "exception": self.PYTHON_EXCEPTION.get_type(),
                 "return": AnyType()
@@ -240,7 +250,7 @@ class JumpOpcode(Opcode):
                 "exception": self.UNKNOWN_BREAK_MODE.get_type()
             }])
 
-            if function_type is not MISSING and argument_type is not MISSING:
+            if self.function_type is not MISSING and argument_type is not MISSING:
                 break_types.append({
                     "return": AnyType(),
                     "exit": IntegerType()
@@ -249,15 +259,13 @@ class JumpOpcode(Opcode):
         return merge_break_types(break_types)
 
     def jump(self, context):
-        function_type, _ = get_expression_break_types(self.function, context, MISSING)
-
         argument = evaluate(self.argument, context)
         function = evaluate(self.function, context)
 
         try:
             jump_to_function(function, argument)
         except BreakException as e:
-            if isinstance(function_type, (FunctionType, PythonFunction)):
+            if isinstance(self.function_type, (FunctionType, PythonFunction)):
                 raise
             if e.mode == "return":
                 raise
@@ -863,6 +871,32 @@ class DynamicDereferenceOpcode(Opcode):
 
         raise BreakException("value", value)
 
+class StaticOpcode(Opcode):
+    def __init__(self, data, visitor):
+        super(StaticOpcode, self).__init__(data)
+        self.expression = enrich_opcode(self.data["expression"], visitor)
+        self.value = MISSING
+
+    def get_value(self, context):
+        if self.value is MISSING:
+            try:
+                self.value = evaluate(self.expression, context)
+            except Exception as e:
+                raise PreparationException("Exception in static opcode {}".format(e))
+
+
+    def get_break_types(self, context):
+        if self.value is not MISSING:
+            raise ValueError()
+        self.get_value(context)
+        value_type = create_crystal_type(self.value, False)
+        return {
+            "value": value_type
+        }
+
+    def jump(self, context):
+        self.get_value(context)
+        raise BreakException("value", self.value)
 
 IMPORTABLE_THINGS = {
     "requests": requests
@@ -935,6 +969,7 @@ OPCODES = {
     "splice": SpliceOpcode,
     "dereference": DereferenceOpcode,
     "dynamic_dereference": DynamicDereferenceOpcode,
+    "static": StaticOpcode,
     "import": ImportOpcode,
     "context": ContextOpcode,
     "addition": BinaryOpcode(lambda a, b: a + b, IntegerType(), "addition"),

@@ -164,6 +164,11 @@ def jump_op(function_expression, argument_expression, ctx=None):
         code["argument"] = argument_expression
     return add_debugging(Object(code), ctx)
 
+def static_op(expression, ctx=None):
+    return add_debugging(Object({
+        "opcode": "static",
+        "expression": expression
+    }), ctx)
 
 def transform_op(code_expression, ctx=None, input="value", output="value"):
     if code_expression is not MISSING and not is_expression(code_expression):
@@ -473,6 +478,13 @@ class RDHLang4Visitor(langVisitor):
         function_expression = self.visit(function_expression)
         argument_expression = self.visit(argument_expression)
         return transform_op(jump_op(function_expression, argument_expression, ctx if self.debug else None), ctx if self.debug else None, "return", "value")
+
+    def visitStaticFunctionInvocation(self, ctx):
+        return static_op(self.visitSingleParameterFunctionInvocation(ctx))
+
+    def visitStaticExpression(self, ctx):
+        expression = self.visit(ctx.expression())
+        return static_op(expression, ctx)
 
     def visitParenthesis(self, ctx):
         return self.visit(ctx.expression())

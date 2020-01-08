@@ -124,6 +124,11 @@ class langVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
+    # Visit a parse tree produced by langParser#staticExpression.
+    def visitStaticExpression(self, ctx:langParser.StaticExpressionContext):
+        return self.visitChildren(ctx)
+
+
     # Visit a parse tree produced by langParser#toNewObject.
     def visitToNewObject(self, ctx:langParser.ToNewObjectContext):
         return self.visitChildren(ctx)
@@ -186,6 +191,11 @@ class langVisitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by langParser#addition.
     def visitAddition(self, ctx:langParser.AdditionContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by langParser#staticFunctionInvocation.
+    def visitStaticFunctionInvocation(self, ctx:langParser.StaticFunctionInvocationContext):
         return self.visitChildren(ctx)
 
 

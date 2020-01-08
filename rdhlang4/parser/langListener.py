@@ -215,6 +215,15 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#staticExpression.
+    def enterStaticExpression(self, ctx:langParser.StaticExpressionContext):
+        pass
+
+    # Exit a parse tree produced by langParser#staticExpression.
+    def exitStaticExpression(self, ctx:langParser.StaticExpressionContext):
+        pass
+
+
     # Enter a parse tree produced by langParser#toNewObject.
     def enterToNewObject(self, ctx:langParser.ToNewObjectContext):
         pass
@@ -329,6 +338,15 @@ class langListener(ParseTreeListener):
 
     # Exit a parse tree produced by langParser#addition.
     def exitAddition(self, ctx:langParser.AdditionContext):
+        pass
+
+
+    # Enter a parse tree produced by langParser#staticFunctionInvocation.
+    def enterStaticFunctionInvocation(self, ctx:langParser.StaticFunctionInvocationContext):
+        pass
+
+    # Exit a parse tree produced by langParser#staticFunctionInvocation.
+    def exitStaticFunctionInvocation(self, ctx:langParser.StaticFunctionInvocationContext):
         pass
 
 

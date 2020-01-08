@@ -774,14 +774,49 @@ class TestDynamicFunctions(TestCase):
         with self.assertRaises(BreakException):
             string_set_function.invoke(List([ words, "hi" ]))
 
+class TestStaticOperator(TestCase):
+    def test_run_time_arithmatic(self):
+        code = prepare_code("""
+            var x = <5 * 8 + 2>;
+            exit x;
+        """)
+        self.assertEquals(code.invoke(), 42)
 
-class TestStdlib(TestCase):
-    def test_add_function(self):
+
+    def test_call_static_function(self):
+        code = prepare_code("""
+            static x = function(Integer) { return argument + 1; };
+            return x<41>;
+        """)
+        self.assertEquals(code.invoke(), 42)
+
+    def test_mixture_of_runtime_and_verification_time(self):
+        code = prepare_code("""
+            static x = function(Integer) { return argument + 1; };
+            static a = x<10>;
+            static b = x(10);
+            var c = x<10>;
+            var d = x<10>;
+            exit a + b + c + d + x(10) + x<10>;
+        """)
+        self.assertEquals(code.invoke(), 66)
+
+
+class TestStaticStdLib(TestCase):
+    def test_add_function_created_in_statics(self):
         code = prepare_code("""
             List<Integer> foo = [ 38 ];
-            static IntegerArrayAdder = add(Integer);
-            IntegerArrayAdder([ foo, 4 ]);
-            return foo[0] + foo[1];
+            static Adder = add(Integer);
+            Adder([ foo, 4 ]);
+            exit foo[0] + foo[1];
+        """)
+        self.assertEquals(code.invoke(), 42)
+
+    def test_add_function_created_with_static_opcode(self):
+        code = prepare_code("""
+            List<Integer> foo = [ 38 ];
+            add<Integer>([ foo, 4 ]);
+            exit foo[0] + foo[1];
         """)
         self.assertEquals(code.invoke(), 42)
 

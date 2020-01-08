@@ -62,6 +62,8 @@ expression
    | SYMBOL                        # unboundDereference
    | expression '(' ')'            # noParameterFunctionInvocation
    | expression '(' expression ')' # singleParameterFunctionInvocation
+   | expression '<' expression '>' # staticFunctionInvocation
+   | '<' expression '>'            # staticExpression
    | '(' expression ')'            # parenthesis
    | '+' expression                # makePositive
    | '-' expression                # negation
@@ -72,8 +74,8 @@ expression
    | expression '%' expression     # modulus
    | expression '>=' expression    # gte
    | expression '<=' expression    # lte
-   | expression '>' expression     # gt
-   | expression '<' expression     # lt
+   | expression ' < ' expression   # lt
+   | expression ' > ' expression   # gt
    | expression '==' expression    # equals
    | expression '!=' expression    # notEquals
    | expression '=' expression     # assignment
@@ -90,8 +92,8 @@ expression
    | 'false'                       # false
    | 'null'                        # null
    | voidType                      # toVoidType
-   | inferredType                  # toInferredType
    | integerType                   # toIntegerType
+   | inferredType                  # toInferredType
    | stringType                    # toStringType
    | functionType                  # toFunctionType
    | objectType                    # toObjectType
