@@ -782,13 +782,47 @@ class TestStaticOperator(TestCase):
         """)
         self.assertEquals(code.invoke(), 42)
 
-
     def test_call_static_function(self):
         code = prepare_code("""
             static x = function(Integer) { return argument + 1; };
             return x<41>;
         """)
         self.assertEquals(code.invoke(), 42)
+
+
+    def test_call_static_function2(self):
+        code = prepare_code("""
+            static square = function(Integer) { return argument * argument; };
+            Integer x1 = <square<6> + <6>>;
+            Integer x2 = <square(6) + <6>>;
+            Integer x3 = <square<6> + 6>;
+            Integer x4 = <square(6) + 6>;
+            Integer x5 = square<6> + <6>;
+            Integer x6 = square(6) + <6>;
+            Integer x7 = square<6> + 6;
+            Integer x8 = square(6) + 6;
+            exit [ x1, x2, x3, x4, x5, x6, x7, x7, x8 ];
+        """, check_application_break_mode_constraints=False)
+        EXPECTED = [ 42, 42, 42, 42, 42, 42, 42, 42, 42 ]
+        result = code.invoke()
+        self.assertEquals(result, EXPECTED)
+
+    def test_call_static_function3(self):
+        code = prepare_code("""
+            static square = function(Integer) { return argument * argument; };
+            var x1 = <square<6> + <6>>;
+            var x2 = <square(6) + <6>>;
+            var x3 = <square<6> + 6>;
+            var x4 = <square(6) + 6>;
+            var x5 = square<6> + <6>;
+            var x6 = square(6) + <6>;
+            var x7 = square<6> + 6;
+            var x8 = square(6) + 6;
+            exit [ x1, x2, x3, x4, x5, x6, x7, x7, x8 ];
+        """, check_application_break_mode_constraints=False)
+        EXPECTED = [ 42, 42, 42, 42, 42, 42, 42, 42, 42 ]
+        result = code.invoke()
+        self.assertEquals(result, EXPECTED)
 
     def test_mixture_of_runtime_and_verification_time(self):
         code = prepare_code("""

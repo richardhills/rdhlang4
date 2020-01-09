@@ -383,9 +383,10 @@ class List(MutableSequence):
         self.wrapped.insert(i, v)
 
     def __eq__(self, other):
-        if not isinstance(other, List):
-            return False
-        return self.wrapped == other.wrapped
+        if isinstance(other, List):
+            return self.wrapped == other.wrapped
+        else:
+            return self.wrapped == other
 
     def __repr__(self):
         return repr(self.wrapped)
