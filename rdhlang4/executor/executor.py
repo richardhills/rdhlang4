@@ -73,7 +73,7 @@ def merge_break_types(breaks_types):
             if not isinstance(type, Type):
                 raise FatalException()
 
-            previous_break_type = result.get(mode, NoValueType())
+            previous_break_type = result.get(mode, NoType())
             new_break_type = merge_types([previous_break_type, type])
             result[mode] = new_break_type
     return result

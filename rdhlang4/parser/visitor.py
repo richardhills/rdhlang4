@@ -796,9 +796,9 @@ class RDHLang4Visitor(langVisitor):
         function_stub = self.visit(ctx.functionStub())
         conditional = self.visit(ctx.expression())
 
-        function_stub.code_expressions.insert(
-            0, conditional_op(conditional, nop(), break_op("loop_break", MISSING), ctx)
-        )
+        function_stub = FunctionStub([
+            conditional_op(conditional, nop(), break_op("loop_break", MISSING), ctx)
+        ]).chain(function_stub)
 
         return catch_op(
             "loop_break",

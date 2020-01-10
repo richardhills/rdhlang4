@@ -660,6 +660,28 @@ class TestMiscelaneous(TestCase):
         """)
         self.assertEqual(function.invoke(), 123);
 
+    def test13(self):
+        # Generally an invalid program, because it might exit with a non-integer
+        function = prepare_code("""
+            var boo = function() {
+            };
+            exit boo();
+        """, check_application_break_mode_constraints=False)
+        self.assertEqual(function.invoke(), NO_VALUE);
+
+    def test14(self):
+        function = prepare_code("""
+            var foo = function(String) {
+                return { type: argument };
+            };
+
+            var bar = dynamic function(foo("Integer") => Integer) {
+               return argument + 1;
+            };
+
+            return bar(41);
+        """, check_application_break_mode_constraints=False)
+        self.assertEqual(function.invoke(), 42);
 
 class TestEuler(TestCase):
 #     def testProblem1a(self):

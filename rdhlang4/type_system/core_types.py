@@ -278,7 +278,7 @@ def dedupe_types(types):
 
 def merge_types(types):
     types = dedupe_types(flatten_types(types))
-    types = [t for t in types if not isinstance(t, (NoType, NoValueType))]
+    types = [t for t in types if not isinstance(t, NoType)]
     if len(types) == 0:
         return NoValueType()
     elif len(types) == 1:
