@@ -11,7 +11,7 @@ from munch import Munch
 
 from rdhlang4.exception_types import DataIntegrityError, IncompatableAssignmentError, \
     CreateReferenceError, FatalException, InvalidDereferenceError, \
-    InvalidCompositeObject
+    InvalidCompositeObject, NoValueError
 from rdhlang4.type_system.core_types import Type, VISIT_CHILDREN, ObjectType, \
     ListType, UnknownType, UnitType, PythonFunction, NoValueType, CREATE_NEW_TYPE, \
     AnyType, are_bindable, compare_composite_types, CompositeType, NoType
@@ -309,7 +309,7 @@ class CompositeManager(object):
         new_value_crystal_type = create_crystal_type(new_value, True)
         for other_type_reference in self.get_type_references():
             if isinstance(other_type_reference, CompositeType):
-                other_key_type = other_type_reference.get_key_type(key)
+                other_key_type, _ = other_type_reference.get_key_type(key)
 
                 if isinstance(other_key_type, NoType):
                     continue
@@ -343,7 +343,9 @@ class ObjectManager(CompositeManager):
     def get_key_value(self, key):
         if not isinstance(key, str):
             raise InvalidDereferenceError()
-        return getattr(self.obj, key, MISSING)
+        if not hasattr(self.obj, key):
+            raise NoValueError()
+        return getattr(self.obj, key)
 
     def create_new_managed_type(self, cls):
         object_manager = self
@@ -397,7 +399,7 @@ class ListManager(CompositeManager):
     def get_key_value(self, key):
         if not isinstance(key, int):
             raise InvalidDereferenceError()
-        if key < len(self.obj):
+        if key >= 0 and key < len(self.obj):
             return self.obj[key]
         else:
-            return MISSING
+            raise NoValueError()

@@ -22,6 +22,9 @@ class InvalidDereferenceError(Exception):
 class InvalidCompositeObject(Exception):
     pass
 
+class NoValueError(Exception):
+    pass
+
 class CrystalValueCanNotBeGenerated(Exception):
     pass
 

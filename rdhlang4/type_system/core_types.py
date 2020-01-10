@@ -5,7 +5,7 @@ from __future__ import unicode_literals
 import threading
 
 from rdhlang4.exception_types import DataIntegrityError, CrystalValueCanNotBeGenerated
-from rdhlang4.utils import MISSING, InternalMarker
+from rdhlang4.utils import MISSING, InternalMarker, default
 
 
 def are_bindable(first, second, first_is_rev_const, second_is_rev_const, result_cache):
@@ -364,8 +364,8 @@ def uncached_compare_composite_types(first, second, first_subset_of_second, seco
         return False
 
     for key_in_both in in_both:
-        first_key_type = first.get_key_type(key_in_both)
-        second_key_type = second.get_key_type(key_in_both)
+        first_key_type, _ = first.get_key_type(key_in_both)
+        second_key_type, _ = second.get_key_type(key_in_both)
 
         if not are_bindable(
             first_key_type,
@@ -378,7 +378,7 @@ def uncached_compare_composite_types(first, second, first_subset_of_second, seco
 
     if not isinstance(first.wildcard_type, NoType):
         for second_key in only_in_second:
-            second_key_type = second.get_key_type(second_key)
+            second_key_type, _ = second.get_key_type(second_key)
             if not are_bindable(
                 first.wildcard_type,
                 second_key_type,
@@ -390,7 +390,7 @@ def uncached_compare_composite_types(first, second, first_subset_of_second, seco
 
     if not isinstance(second.wildcard_type, NoType):
         for first_key in only_in_first:
-            first_key_type = first.get_key_type(first_key)
+            first_key_type, _ = first.get_key_type(first_key)
             if not are_bindable(
                 first_key_type,
                 second.wildcard_type,
@@ -443,7 +443,11 @@ class ObjectType(CompositeType):
         return self.property_types
 
     def get_key_type(self, key):
-        return self.property_types.get(key, self.wildcard_type)
+        key_type = self.property_types.get(key, MISSING)
+        if key_type is not MISSING:
+            return key_type, False
+        else:
+            return self.wildcard_type, True
 
     def get_keys_and_types(self):
         return self.property_types.items()
@@ -563,10 +567,6 @@ class ListType(CompositeType):
         self.wildcard_type = wildcard_type
         self.is_rev_const = is_rev_const
 
-        if isinstance(wildcard_type, NoValueType):
-            import pydevd
-            pydevd.settrace()
-
         for property_type in self.entry_types:
             if not isinstance(property_type, Type):
                 raise DataIntegrityError()
@@ -578,9 +578,9 @@ class ListType(CompositeType):
 
     def get_key_type(self, key):
         if key >= 0 and key < len(self.entry_types):
-            return self.entry_types[key]
+            return self.entry_types[key], False
         else:
-            return self.wildcard_type
+            return self.wildcard_type, True
 
     def get_keys_and_types(self):
         return list(enumerate(self.entry_types))

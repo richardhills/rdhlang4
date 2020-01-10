@@ -11,7 +11,7 @@ from rdhlang4.exception_types import FatalException, PreparationException, \
     IncompatableAssignmentError, CreateReferenceError, \
     InvalidApplicationException, DataIntegrityError, \
     CrystalValueCanNotBeGenerated, InvalidDereferenceError, \
-    InvalidCompositeObject
+    InvalidCompositeObject, NoValueError
 from rdhlang4.parser.visitor import nop, context_op, literal_op, type_op
 from rdhlang4.type_system.core_types import UnitType, ObjectType, Type, NoValueType, \
     merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
@@ -766,8 +766,8 @@ class DereferenceOpcode(Opcode):
         crystal_reference_value = reference_type.get_crystal_value()
 
         if isinstance(of_type, CompositeType):
-            value_type = of_type.get_key_type(crystal_reference_value)
-            if value_type is MISSING:
+            value_type, is_wildcard = of_type.get_key_type(crystal_reference_value)
+            if is_wildcard:
                 invalid_dereference_possible = True
                 value_type = of_type.wildcard_type
         else:
@@ -797,6 +797,8 @@ class DereferenceOpcode(Opcode):
             except InvalidCompositeObject:
                 raise self.INVALID_DEREFERENCE()
             except InvalidDereferenceError:
+                raise self.INVALID_DEREFERENCE()
+            except NoValueError:
                 raise self.INVALID_DEREFERENCE()
 
         return reference, of
