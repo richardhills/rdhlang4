@@ -14,7 +14,7 @@ add_function = prepare_code("""
                         "of": { "opcode": "context" }
                     }
                 },
-                "start": { "opcode": "literal", "value": -1 },
+                "end": { "opcode": "literal", "value": 0 },
                 "delete": { "opcode": "literal", "value": 0 },
                 "insert": {
                     "opcode": "new_tuple",

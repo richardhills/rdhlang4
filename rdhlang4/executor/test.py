@@ -737,7 +737,7 @@ class TestEuler(TestCase):
 
 set_first_list_element = prepare_code("""
     function(Any) {
-        return dynamic function(Tuple<List<outer.argument>, outer.argument>) nothrow noexit {
+        return dynamic function(Tuple<Tuple<outer.argument>, outer.argument>) nothrow noexit {
             argument[0][0] = argument[1];
             return;
         };
@@ -746,7 +746,7 @@ set_first_list_element = prepare_code("""
 
 broken_argument_set_first_list_element = prepare_code("""
     function(Any) {
-        return dynamic function(Tuple<List<outer.argument>, Integer>) nothrow noexit {
+        return dynamic function(Tuple<Tuple<outer.argument>, Integer>) nothrow noexit {
             argument[0][0] = argument[1];
             return;
         };

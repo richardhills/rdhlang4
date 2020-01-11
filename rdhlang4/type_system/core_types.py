@@ -4,7 +4,8 @@ from __future__ import unicode_literals
 
 import threading
 
-from rdhlang4.exception_types import DataIntegrityError, CrystalValueCanNotBeGenerated
+from rdhlang4.exception_types import DataIntegrityError, CrystalValueCanNotBeGenerated, \
+    InvalidDereferenceError
 from rdhlang4.utils import MISSING, InternalMarker, default
 
 
@@ -168,6 +169,12 @@ def broaden_inferred_type(type):
         if isinstance(type.value, bool):
             return BooleanType()
     return type
+
+def safe_get_crystal_value(type):
+    try:
+        return type.get_crystal_value()
+    except CrystalValueCanNotBeGenerated:
+        return MISSING
 
 class InferredType(Type):
     def is_copyable_from(self, other, result_cache):
@@ -443,6 +450,8 @@ class ObjectType(CompositeType):
         return self.property_types
 
     def get_key_type(self, key):
+        if not isinstance(key, str):
+            raise InvalidDereferenceError()
         key_type = self.property_types.get(key, MISSING)
         if key_type is not MISSING:
             return key_type, False
@@ -577,6 +586,8 @@ class ListType(CompositeType):
         return list(range(len(self.entry_types)))
 
     def get_key_type(self, key):
+        if not isinstance(key, int):
+            raise InvalidDereferenceError()
         if key >= 0 and key < len(self.entry_types):
             return self.entry_types[key], False
         else:

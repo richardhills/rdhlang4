@@ -84,7 +84,6 @@ class ReplaceAllRecursiveEntries(object):
                 obj.entry_types[key] = original_type.result
         return original_type
 
-
 def create_crystal_type(value, set_is_rev_const, mask_type=None, lazy_object_types=False):
     creator = CrystalTypeCreator(set_is_rev_const, mask_type, lazy_object_types)
     crystal_type = creator.create_crystal_type(value)
