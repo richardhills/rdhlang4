@@ -40,11 +40,9 @@ def prepare_code(code, debug=False, check_application_break_mode_constraints=Tru
 
     if ast and isinstance(ast, dict) and "static" in ast:
         if include_stdlib:
-            from rdhlang4.executor.stdlib import add_function
+            from rdhlang4.executor.stdlib import STDLIB
             top_context = Object({
-                "static": Object({
-                    "add": add_function
-                })
+                "static": STDLIB
             })
         else:
             top_context = NO_VALUE

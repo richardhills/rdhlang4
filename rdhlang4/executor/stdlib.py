@@ -1,4 +1,7 @@
 from rdhlang4.parser.rdhparser import prepare_code
+from rdhlang4.parser.visitor import type_op
+from rdhlang4.type_system.values import Object
+
 
 add_function = prepare_code("""
     function(Any) {
@@ -33,3 +36,12 @@ add_function = prepare_code("""
         };
     }
 """, check_application_break_mode_constraints=False, include_stdlib=False)
+
+STDLIB = Object({
+    "add": add_function,
+    "int": { "type": "Integer" },
+    "string": { "type": "String" },
+    "bool": { "type": "bool" },
+    "any": { "type": "Any" }
+})
+
