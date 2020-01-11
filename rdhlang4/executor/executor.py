@@ -416,10 +416,10 @@ class AssignmentOpcode(Opcode):
         return merge_break_types(break_types)
 
     def jump(self, context):
-        reference, of = self.dereference.get_reference_and_of(context, check_reference_exists=False)
+        reference, of_manager = self.dereference.get_reference_and_of_manager(context)
         new_value = evaluate(self.rvalue, context)
         try:
-            get_manager(of).set_key_value(reference, new_value)
+            of_manager.set_key_value(reference, new_value)
         except InvalidDereferenceError:
             raise self.INVALID_ASSIGNMENT(self)
         except IncompatableAssignmentError:
@@ -631,7 +631,7 @@ class SpliceOpcode(Opcode):
             crystal_end_value = safe_get_crystal_value(end_value_type)
             if (crystal_end_value is MISSING
                 or crystal_end_value < 0
-                or crystal_end_value >= len_entry_types
+                or crystal_end_value > len_entry_types
                 or (crystal_delete_value is not MISSING
                     and crystal_end_value < crystal_delete_value
                 )
@@ -835,44 +835,41 @@ class DereferenceOpcode(Opcode):
 
         return merge_break_types(break_types)
 
-    def get_reference_and_of(self, context, check_reference_exists=True):
-        of = evaluate(self.of, context)
+    def get_reference_and_of_manager(self, context):
+        of_manager = get_manager(evaluate(self.of, context))
 
         reference = evaluate(self.reference, context)
 
-        if check_reference_exists:
-            try:
-                get_manager(of).get_key_value(reference)
-            except InvalidCompositeObject:
-                raise self.INVALID_DEREFERENCE()
-            except InvalidDereferenceError:
-                raise self.INVALID_DEREFERENCE()
-            except NoValueError:
-                raise self.INVALID_DEREFERENCE()
-
-        return reference, of
+        return reference, of_manager
 
     def jump(self, context):
-        reference, of = self.get_reference_and_of(context)
-
-        raise BreakException("value", get_manager(of).get_key_value(reference))
+        try:
+            reference, of_manager = self.get_reference_and_of_manager(context)
+            of_type, _ = get_expression_break_types(self.of, context)
+            raise BreakException("value", of_manager.get_key_value(reference, of_type))
+        except InvalidCompositeObject:
+            raise self.INVALID_DEREFERENCE()
+        except InvalidDereferenceError:
+            raise self.INVALID_DEREFERENCE()
+        except NoValueError:
+            raise self.INVALID_DEREFERENCE()
 
     def __repr__(self):
         return "Dereference< {}.{} >".format(self.of, self.reference)
 
 
-def dynamic_get_reference_and_of(context, reference):
+def dynamic_get_reference_and_of_manager(context, reference):
     argument = getattr(context, "argument", MISSING)
     if argument is not MISSING and isinstance(argument, Object) and reference in argument:
-        return reference, argument
+        return reference, get_manager(argument)
 
     local = getattr(context, "local", MISSING)
     if local is not MISSING and isinstance(local, Object) and reference in local:
-        return reference, local
+        return reference, get_manager(local)
 
     outer = getattr(context, "outer", MISSING)
     if outer is not MISSING and isinstance(outer, Object):
-        return dynamic_get_reference_and_of(outer, reference)
+        return dynamic_get_reference_and_of_manager(outer, reference)
 
     return MISSING  # Meaning we couldn't find it
 
@@ -894,24 +891,21 @@ class DynamicDereferenceOpcode(Opcode):
 
         return merge_break_types(break_types)
 
-    def get_reference_and_of(self, context, check_reference_exists=False):
-        if check_reference_exists:
-            raise ValueError()
-
+    def get_reference_and_of_manager(self, context):
         reference = evaluate(self.reference, context)
 
-        search_result = dynamic_get_reference_and_of(context, reference)
+        search_result = dynamic_get_reference_and_of_manager(context, reference)
         if search_result is not MISSING:
             return search_result
 
         # Fall back on it being a local variable
-        return reference, getattr(context, "local", MISSING)
+        return reference, get_manager(getattr(context, "local", MISSING))
 
     def jump(self, context):
-        reference, of = self.get_reference_and_of(context)
-
         try:
-            value = get_manager(of).get_key_value(reference)
+            reference, of_manager = self.get_reference_and_of_manager(context)
+
+            value = of_manager.get_key_value(reference, NoType())
         except InvalidCompositeObject:
             raise self.INVALID_DEREFERENCE()
         except InvalidDereferenceError:

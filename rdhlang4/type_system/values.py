@@ -326,11 +326,11 @@ class CompositeManager(object):
     def create_reference_on_all_child_references(self, new_type_reference):
         for new_key_name, new_key_type in new_type_reference.get_keys_and_types():
             # Identify whether the reference is to an object that also needs constraining with create_reference
-            our_property_value = self.get_key_value(new_key_name)
+            our_property_value = self.get_key_value(new_key_name, new_key_type)
             if isinstance(new_key_type, (ListType, ObjectType)):
                 get_manager(our_property_value).create_reference(new_key_type, True)
 
-    def get_key_value(self, key):
+    def get_key_value(self, key, accessing_type):
         raise NotImplementedError(self)
 
 class ObjectManager(CompositeManager):
@@ -340,7 +340,7 @@ class ObjectManager(CompositeManager):
         obj.__class__ = self.create_new_managed_type(obj.__class__)
         super(ObjectManager, self).__init__(obj)
 
-    def get_key_value(self, key):
+    def get_key_value(self, key, accessing_type):
         if not isinstance(key, str):
             raise InvalidDereferenceError()
         if not hasattr(self.obj, key):
@@ -398,10 +398,36 @@ class List(MutableSequence):
     def __repr__(self):
         return repr(self.wrapped)
 
+
+
 class ListManager(CompositeManager):
     type = ListType
 
-    def get_key_value(self, key):
+    def create_add_function(self, type):
+        from rdhlang4.parser.rdhparser import prepare_code
+
+        factory = prepare_code("""
+            function(Any) {
+                return dynamic function(List<outer.argument>) noexit {
+                    return function(outer.outer.argument) nothrow noexit {
+                        exec({
+                            "opcode": "splice",
+                            "list": code( outer.argument ),
+                            "end": code( 0 ),
+                            "delete": code( 0 ),
+                            "insert": code( [ argument ] )
+                        });
+                        return;
+                    };
+                };
+            }
+        """, check_application_break_mode_constraints=False, include_stdlib=False)
+
+        return factory.invoke(type.to_dict()).invoke(self.obj)
+
+    def get_key_value(self, key, accessing_type):
+        if key == "add":
+            return self.create_add_function(accessing_type.wildcard_type)
         if not isinstance(key, int):
             raise InvalidDereferenceError()
         if key >= 0 and key < len(self.obj):

@@ -134,6 +134,15 @@ class langListener(ParseTreeListener):
         pass
 
 
+    # Enter a parse tree produced by langParser#expressionLiteral.
+    def enterExpressionLiteral(self, ctx:langParser.ExpressionLiteralContext):
+        pass
+
+    # Exit a parse tree produced by langParser#expressionLiteral.
+    def exitExpressionLiteral(self, ctx:langParser.ExpressionLiteralContext):
+        pass
+
+
     # Enter a parse tree produced by langParser#newTuple.
     def enterNewTuple(self, ctx:langParser.NewTupleContext):
         pass

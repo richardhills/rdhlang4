@@ -36,6 +36,7 @@ literal
    | objectLiteral
    | tupleLiteral
    | functionLiteral
+   | expressionLiteral
    ;
 
 objectLiteral
@@ -50,6 +51,10 @@ literalPair
   
 tupleLiteral
    : '[' literal? (',' literal)* ']'
+   ;
+
+expressionLiteral
+   : 'code' '(' expression ')'
    ;
 
 newTuple

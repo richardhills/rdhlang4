@@ -113,6 +113,18 @@ class TestExecutor(TestCase):
         """)
         self.assertEqual(function.invoke(), 42)
 
+    def test_code(self):
+        function = prepare_code("""
+            function(Void => Integer) {
+                return exec({
+                    "opcode": "addition",
+                    "lvalue": code( 34 + 4 ),
+                    "rvalue": code( 4 )
+                });
+            }
+        """)
+        self.assertEqual(function.invoke(), 42)
+
     def test_invalid_assignment(self):
         ast = parse("""
             function(Void => String) nothrow {
@@ -804,6 +816,21 @@ class TestDynamicFunctions(TestCase):
         string_set_function = set_first_list_element.invoke(Object({ "type": "String" }))
         with self.assertRaises(BreakException):
             string_set_function.invoke(List([ words, "hi" ]))
+
+class TestGenericDereferences(TestCase):
+    def test_adder_function(self):
+        code = prepare_code("""
+            function() {
+                List<Integer> foo = [ 1, 2, 3 ];
+
+                Function<Integer => Void> adder = foo.add;
+
+                adder(4);
+
+                return foo[0] + foo[1] + foo[2] + foo[3];
+            }
+        """)
+        self.assertEquals(code.invoke(), 10)
 
 class TestStaticOperator(TestCase):
     def test_run_time_arithmatic(self):

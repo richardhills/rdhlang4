@@ -589,6 +589,8 @@ class ListType(CompositeType):
         return list(range(len(self.entry_types)))
 
     def get_key_type(self, key):
+        if key == "add":
+            return FunctionType(self.wildcard_type, { "return": NoValueType() }), False
         if not isinstance(key, int):
             raise InvalidDereferenceError()
         if key >= 0 and key < len(self.entry_types):

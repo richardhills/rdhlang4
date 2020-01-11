@@ -704,6 +704,9 @@ class RDHLang4Visitor(langVisitor):
     def visitTupleLiteral(self, ctx):
         return List([ self.visit(l) for l in ctx.literal() ])
 
+    def visitExpressionLiteral(self, ctx):
+        return add_debugging(self.visit(ctx.expression()), ctx)
+
     def visitNewTuple(self, ctx):
         expressions = [self.visit(e) for e in ctx.expression()]
 
