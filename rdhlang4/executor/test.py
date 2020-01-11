@@ -683,6 +683,15 @@ class TestMiscelaneous(TestCase):
         """, check_application_break_mode_constraints=False)
         self.assertEqual(function.invoke(), 42);
 
+    def test15(self):
+        function = prepare_code("""
+            function() {
+              Tuple<Integer> foo = [ 1, 2 ];
+              return foo[1];
+            }
+        """)
+        self.assertEquals(function.invoke(), 2)
+
 class TestEuler(TestCase):
 #     def testProblem1a(self):
 #         function = prepare_code("""

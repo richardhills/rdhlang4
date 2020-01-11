@@ -834,9 +834,15 @@ class DereferenceOpcode(Opcode):
         crystal_reference_value = reference_type.get_crystal_value()
 
         if isinstance(of_type, CompositeType):
-            value_type, is_wildcard = of_type.get_key_type(crystal_reference_value)
-            if is_wildcard:
+            try:
+                value_type, is_wildcard = of_type.get_key_type(crystal_reference_value)
+                if is_wildcard:
+                    invalid_dereference_possible = True
+                    if isinstance(value_type, NoType):
+                        value_type = AnyType()
+            except InvalidDereferenceError:
                 invalid_dereference_possible = True
+                value_type = AnyType()
         else:
             invalid_dereference_possible = True
             value_type = AnyType()

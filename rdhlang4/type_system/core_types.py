@@ -85,6 +85,9 @@ class Type(object):
             raise ValueError()
         return result
 
+    def to_dict(self):
+        raise NotImplementedError()
+
     def __repr__(self):
         return type_repr(self)
 
@@ -619,6 +622,15 @@ class ListType(CompositeType):
     def get_crystal_value(self):
         from rdhlang4.type_system.values import List
         return List([p.get_crystal_value() for p in self.entry_types])
+
+    def to_dict(self):
+        return {
+            "type": "List",
+            "entry_types": [
+                type.to_dict() for type in self.entry_types
+            ],
+            "wildcard_type": self.wildcard_type.to_dict()
+        }
 
 class FunctionType(Type):
 
