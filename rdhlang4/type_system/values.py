@@ -9,9 +9,10 @@ import weakref
 
 from munch import Munch
 
-from rdhlang4.exception_types import DataIntegrityError, IncompatableAssignmentError, \
-    CreateReferenceError, FatalException, InvalidDereferenceError, \
-    InvalidCompositeObject, NoValueError
+from rdhlang4.exception_types import DataIntegrityError, InvalidCompositeObject, \
+    CreateReferenceError, FatalException, IncompatableAssignmentError, \
+    InvalidDereferenceError, NoValueError, InvalidSpliceParametersError, \
+    InvalidSpliceModificationError
 from rdhlang4.type_system.core_types import Type, VISIT_CHILDREN, ObjectType, \
     ListType, UnknownType, UnitType, PythonFunction, NoValueType, CREATE_NEW_TYPE, \
     AnyType, are_bindable, compare_composite_types, CompositeType, NoType
@@ -346,6 +347,11 @@ class ObjectManager(CompositeManager):
             raise NoValueError()
         return getattr(self.obj, key)
 
+    def set_key_value(self, key, new_value):
+        if not isinstance(key, str):
+            raise InvalidDereferenceError()
+        setattr(self.obj, key, new_value)
+
     def create_new_managed_type(self, cls):
         object_manager = self
 
@@ -402,3 +408,49 @@ class ListManager(CompositeManager):
             return self.obj[key]
         else:
             raise NoValueError()
+
+    def set_key_value(self, key, new_value):
+        if not isinstance(key, int):
+            raise InvalidDereferenceError()
+        self.obj[key] = new_value
+
+    def check_slice(self, start, end, delete, insert):
+        if not (bool(isinstance(start, int)) ^ bool(isinstance(end, int))):
+            raise InvalidSpliceParametersError()
+
+        if (not isinstance(delete, int)
+            or not isinstance(insert, List)
+        ):
+            raise InvalidSpliceParametersError()
+
+        if delete < 0:
+            raise InvalidSpliceModificationError()
+
+        list_len = len(self.obj)
+
+        if start is not MISSING:
+            if start < 0 or start > list_len or start + delete > list_len:
+                raise InvalidSpliceModificationError()
+
+        if end is not MISSING:
+            if end < 0 or end > list_len or end < delete:
+                raise InvalidSpliceModificationError()
+
+    def splice(self, start, end, delete, insert):
+        self.check_slice(start, end, delete, insert)
+        list_len = len(self.obj)
+
+        try:
+            for _ in range(delete):
+                if start is not MISSING:
+                    self.obj.pop(start)
+                else:
+                    self.obj.pop(list_len - end)
+    
+            for insert_element in reversed(insert):
+                if start is not MISSING:
+                    self.obj.insert(start, insert_element)
+                else:
+                    self.obj.insert(list_len - end, insert_element)
+        except Exception:
+            raise FatalException()

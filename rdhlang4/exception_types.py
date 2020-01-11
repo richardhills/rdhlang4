@@ -19,6 +19,12 @@ class IncompatableAssignmentError(Exception):
 class InvalidDereferenceError(Exception):
     pass
 
+class InvalidSpliceParametersError(Exception):
+    pass
+
+class InvalidSpliceModificationError(Exception):
+    pass
+
 class InvalidCompositeObject(Exception):
     pass
 

@@ -11,7 +11,8 @@ from rdhlang4.exception_types import FatalException, PreparationException, \
     IncompatableAssignmentError, CreateReferenceError, \
     InvalidApplicationException, DataIntegrityError, \
     CrystalValueCanNotBeGenerated, InvalidDereferenceError, \
-    InvalidCompositeObject, NoValueError
+    InvalidCompositeObject, NoValueError, InvalidSpliceParametersError, \
+    InvalidSpliceModificationError
 from rdhlang4.parser.visitor import nop, context_op, literal_op, type_op
 from rdhlang4.type_system.core_types import UnitType, ObjectType, Type, NoValueType, \
     merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
@@ -418,10 +419,9 @@ class AssignmentOpcode(Opcode):
         reference, of = self.dereference.get_reference_and_of(context, check_reference_exists=False)
         new_value = evaluate(self.rvalue, context)
         try:
-            if isinstance(reference, str):
-                setattr(of, reference, new_value)
-            if isinstance(reference, int):
-                of[reference] = new_value
+            get_manager(of).set_key_value(reference, new_value)
+        except InvalidDereferenceError:
+            raise self.INVALID_ASSIGNMENT(self)
         except IncompatableAssignmentError:
             raise self.INVALID_ASSIGNMENT(self)
 
@@ -599,43 +599,50 @@ class SpliceOpcode(Opcode):
         insert_value_type, insert_break_types = get_expression_break_types(self.insert, context)
 
         int_type = IntegerType()
+        len_entry_types = len(list_value_type.entry_types)
+        invalid_parameters_possible = False
+        invalid_modification_possible = False
 
         if (not isinstance(list_value_type, ListType)
             or not int_type.is_copyable_from(delete_value_type, {})
             or not isinstance(insert_value_type, ListType)
         ):
-            break_types.append({
-                "exception": self.INVALID_PARAMETERS.get_type()
-            })
+            invalid_parameters_possible = True
+
+        crystal_delete_value = safe_get_crystal_value(delete_value_type)
+        if crystal_delete_value is MISSING or crystal_delete_value < 0 or crystal_delete_value > len_entry_types:
+            invalid_modification_possible = True
+
         if start_value_type is not MISSING:
             if not int_type.is_copyable_from(start_value_type, {}):
-                break_types.append({
-                    "exception": self.INVALID_PARAMETERS.get_type()
-                })
+                invalid_parameters_possible = True
             crystal_start_value = safe_get_crystal_value(start_value_type)
             if (crystal_start_value is MISSING
                 or crystal_start_value < 0
-                or crystal_start_value >= len(list_value_type.entry_types)
+                or crystal_start_value > len_entry_types
+                or (crystal_delete_value is not MISSING
+                    and crystal_start_value + crystal_delete_value > len_entry_types
+                )
             ):
-                break_types.append({
-                    "exception": self.INVALID_MODIFICATION.get_type()
-                })
+                invalid_modification_possible = True
         if end_value_type is not MISSING:
             if not int_type.is_copyable_from(end_value_type, {}):
-                break_types.append({
-                    "exception": self.INVALID_PARAMETERS.get_type()
-                })
+                invalid_parameters_possible = True
             crystal_end_value = safe_get_crystal_value(end_value_type)
             if (crystal_end_value is MISSING
                 or crystal_end_value < 0
-                or crystal_end_value >= len(list_value_type.entry_types)
+                or crystal_end_value >= len_entry_types
+                or (crystal_delete_value is not MISSING
+                    and crystal_end_value < crystal_delete_value
+                )
             ):
-                break_types.append({
-                    "exception": self.INVALID_MODIFICATION.get_type()
-                })
-        crystal_delete_value = safe_get_crystal_value(delete_value_type)
+                invalid_modification_possible = True
 
-        if crystal_delete_value is MISSING or crystal_delete_value < 0:
+        if invalid_parameters_possible:
+            break_types.append({
+                "exception": self.INVALID_PARAMETERS.get_type()
+            })
+        if invalid_modification_possible:
             break_types.append({
                 "exception": self.INVALID_MODIFICATION.get_type()
             })
@@ -666,45 +673,14 @@ class SpliceOpcode(Opcode):
         delete = evaluate(self.delete, context)
         insert = evaluate(self.insert, context)
 
-        if not (bool(isinstance(start, int)) ^ bool(isinstance(end, int))):
+        try:
+            get_manager(list).splice(start, end, delete, insert)
+        except InvalidCompositeObject:
             raise self.INVALID_PARAMETERS()
-
-        if (not isinstance(delete, int)
-            or not isinstance(list, List)
-            or not isinstance(insert, List)
-        ):
+        except InvalidSpliceParametersError:
             raise self.INVALID_PARAMETERS()
-
-        if delete < 0:
+        except InvalidSpliceModificationError:
             raise self.INVALID_MODIFICATION()
-
-        if start is not MISSING:
-            if start < 0:
-                start = start + len(list)
-
-            if start < 0 or start + delete >= len(list):
-                raise self.INVALID_MODIFICATION()
-
-        if end is not MISSING:
-            if end < 0:
-                end = end + len(list)
-
-            if end < 0 or end + delete >= len(list):
-                raise self.INVALID_MODIFICATION()
-
-        list_len = len(list)
-
-        for _ in range(delete):
-            if start is not MISSING:
-                list.pop(start)
-            else:
-                list.pop(list_len - end)
-
-        for insert_element in reversed(insert):
-            if start is not MISSING:
-                list.insert(start, insert_element)
-            else:
-                list.insert(list_len - end, insert_element)
 
         raise BreakException("value", NO_VALUE)
 
