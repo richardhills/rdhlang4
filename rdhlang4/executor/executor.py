@@ -940,8 +940,7 @@ class DynamicDereferenceOpcode(Opcode):
             raise self.INVALID_DEREFERENCE()
         except InvalidDereferenceError:
             raise self.INVALID_DEREFERENCE()
-
-        if value is MISSING:
+        except NoValueError:
             raise self.INVALID_DEREFERENCE()
 
         raise BreakException("value", value)

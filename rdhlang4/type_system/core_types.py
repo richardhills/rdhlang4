@@ -619,6 +619,13 @@ class ListType(CompositeType):
 
         return visitor.exit(original_type=self, new_type=new_type, key=key, obj=obj)
 
+    def replace_inferred_types(self, other):
+        if not isinstance(other, ListType):
+            return self
+        return ListType([
+            entry_type.replace_inferred_types(other.entry_types[i]) for i, entry_type in enumerate(self.entry_types)
+        ], self.wildcard_type.replace_inferred_types(other.wildcard_type), False)
+
     def get_crystal_value(self):
         from rdhlang4.type_system.values import List
         return List([p.get_crystal_value() for p in self.entry_types])
