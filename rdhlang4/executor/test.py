@@ -818,19 +818,45 @@ class TestDynamicFunctions(TestCase):
             string_set_function.invoke(List([ words, "hi" ]))
 
 class TestGenericDereferences(TestCase):
-    def test_adder_function(self):
+    def test_pusher_function(self):
         code = prepare_code("""
             function() {
                 List<Integer> foo = [ 1, 2, 3 ];
 
-                Function<Integer => Void> adder = foo.add;
+                Function<Integer => Void> pusher = foo.push;
 
-                adder(4);
+                pusher(4);
 
                 return foo[0] + foo[1] + foo[2] + foo[3];
             }
         """)
         self.assertEquals(code.invoke(), 10)
+
+    def test_popper_function(self):
+        code = prepare_code("""
+            function() {
+                List<Integer> foo = [ 5, 2, 77, 42, 64 ];
+
+                var popper = foo.pop;
+
+                popper();
+
+                return popper();
+            }
+        """)
+        self.assertEquals(code.invoke(), 42)
+
+    def test_adder_function(self):
+        code = prepare_code("""
+            function() {
+                List<Integer> foo = [ 1, 2, 3, 42 ];
+
+                var adder = foo.add;
+                adder([1, 321]);
+                return foo;
+            }
+        """)
+        self.assertEquals(code.invoke(), [ 1, 321, 2, 3, 42 ])
 
 class TestStaticOperator(TestCase):
     def test_run_time_arithmatic(self):

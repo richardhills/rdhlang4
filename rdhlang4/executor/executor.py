@@ -17,7 +17,7 @@ from rdhlang4.parser.visitor import nop, context_op, literal_op, type_op
 from rdhlang4.type_system.core_types import UnitType, ObjectType, Type, NoValueType, \
     merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
     InferredType, OneOfType, ListType, PythonFunction, RemoveRevConst, \
-    CompositeType, NoType, safe_get_crystal_value
+    CompositeType, NoType, safe_get_crystal_value, splice_list_types
 from rdhlang4.type_system.values import Object, List, \
     get_manager, create_crystal_type
 from rdhlang4.utils import InternalMarker, MISSING, NO_VALUE, spread_dict
@@ -583,60 +583,69 @@ class SpliceOpcode(Opcode):
         if "end" in data:
             self.end = enrich_opcode(data["end"], visitor)
         self.delete = enrich_opcode(data["delete"], visitor)
-        self.insert = enrich_opcode(data["insert"], visitor)
+        self.insert = MISSING
+        if "insert" in data:
+            self.insert = enrich_opcode(data["insert"], visitor)
 
     def get_break_types(self, context):
         break_types = []
 
         list_value_type, list_break_types = get_expression_break_types(self.list, context)
-        start_value_type = start_break_types = MISSING
+        start_value_type = start_break_types = crystal_start_value = MISSING
         if self.start is not MISSING:
             start_value_type, start_break_types = get_expression_break_types(self.start, context)
-        end_value_type = end_break_types = MISSING
+        end_value_type = end_break_types = crystal_end_value = MISSING
         if self.end is not MISSING:
             end_value_type, end_break_types = get_expression_break_types(self.end, context)
         delete_value_type, delete_break_types = get_expression_break_types(self.delete, context)
-        insert_value_type, insert_break_types = get_expression_break_types(self.insert, context)
+        insert_value_type = insert_break_types = MISSING
+        if self.insert is not MISSING:
+            insert_value_type, insert_break_types = get_expression_break_types(self.insert, context)
 
         int_type = IntegerType()
-        len_entry_types = len(list_value_type.entry_types)
         invalid_parameters_possible = False
         invalid_modification_possible = False
 
+        len_entry_types = len(list_value_type.entry_types)
+
         if (not isinstance(list_value_type, ListType)
             or not int_type.is_copyable_from(delete_value_type, {})
-            or not isinstance(insert_value_type, ListType)
+        ):
+            invalid_parameters_possible = True
+
+        if(insert_value_type is not MISSING
+            and not isinstance(insert_value_type, ListType)
         ):
             invalid_parameters_possible = True
 
         crystal_delete_value = safe_get_crystal_value(delete_value_type)
-        if crystal_delete_value is MISSING or crystal_delete_value < 0 or crystal_delete_value > len_entry_types:
-            invalid_modification_possible = True
 
         if start_value_type is not MISSING:
             if not int_type.is_copyable_from(start_value_type, {}):
                 invalid_parameters_possible = True
             crystal_start_value = safe_get_crystal_value(start_value_type)
-            if (crystal_start_value is MISSING
-                or crystal_start_value < 0
-                or crystal_start_value > len_entry_types
-                or (crystal_delete_value is not MISSING
-                    and crystal_start_value + crystal_delete_value > len_entry_types
-                )
-            ):
-                invalid_modification_possible = True
         if end_value_type is not MISSING:
             if not int_type.is_copyable_from(end_value_type, {}):
                 invalid_parameters_possible = True
             crystal_end_value = safe_get_crystal_value(end_value_type)
-            if (crystal_end_value is MISSING
-                or crystal_end_value < 0
-                or crystal_end_value > len_entry_types
-                or (crystal_delete_value is not MISSING
-                    and crystal_end_value < crystal_delete_value
-                )
-            ):
+
+        if(crystal_delete_value is not MISSING
+           and insert_value_type is not MISSING
+           and list_value_type is not MISSING
+        ):
+            possible_start_values = MISSING
+            if crystal_start_value is not MISSING:
+                possible_start_values = [ crystal_start_value ]
+            if crystal_end_value is not MISSING:
+                possible_start_values = range(len_entry_types - crystal_end_value, len_entry_types + 1)
+
+            if possible_start_values is MISSING:
                 invalid_modification_possible = True
+            else:
+                for possible_start_value in possible_start_values:
+                    post_modification_type = splice_list_types(list_value_type, possible_start_value, crystal_delete_value, insert_value_type)
+                    if not list_value_type.is_copyable_from(post_modification_type, {}):
+                        invalid_modification_possible = True
 
         if invalid_parameters_possible:
             break_types.append({
@@ -648,13 +657,15 @@ class SpliceOpcode(Opcode):
             })
 
         break_types.extend([
-            list_break_types, delete_break_types, insert_break_types
+            list_break_types, delete_break_types
         ])
 
         if start_break_types is not MISSING:
             break_types.append(start_break_types)
         if end_break_types is not MISSING:
             break_types.append(end_break_types)
+        if insert_break_types is not MISSING:
+            break_types.append(insert_break_types)
 
         break_types.append({
             "value": NoValueType()
@@ -671,7 +682,9 @@ class SpliceOpcode(Opcode):
         if self.end is not MISSING:
             end = evaluate(self.end, context)
         delete = evaluate(self.delete, context)
-        insert = evaluate(self.insert, context)
+        insert = MISSING
+        if self.insert is not MISSING:
+            insert = evaluate(self.insert, context)
 
         try:
             get_manager(list).splice(start, end, delete, insert)

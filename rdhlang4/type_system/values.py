@@ -398,38 +398,86 @@ class List(MutableSequence):
     def __repr__(self):
         return repr(self.wrapped)
 
-
+LIST_METHODS = {
+    "push": """
+        function(Any) {
+            return dynamic function(List<outer.argument>) noexit {
+                return function(outer.outer.argument) nothrow noexit {
+                    exec({
+                        "opcode": "splice",
+                        "list": code( outer.argument ),
+                        "end": code( 0 ),
+                        "delete": code( 0 ),
+                        "insert": code( [ argument ] )
+                    });
+                    return;
+                };
+            };
+        }
+    """,
+    "pop": """
+        function(Any) {
+            return dynamic function(List<outer.argument>) noexit {
+                return function() noexit {
+                    outer.outer.argument value = outer.argument[-1];
+                    exec({
+                        "opcode": "splice",
+                        "list": code( outer.argument ),
+                        "end": code( 1 ),
+                        "delete": code( 1 )
+                    });
+                    return value;
+                };
+            };
+        }
+    """,
+    "add": """
+        function(Any) {
+            return dynamic function(List<outer.argument>) noexit {
+                return function(Tuple<Integer, outer.outer.argument>) noexit {
+                    exec({
+                        "opcode": "splice",
+                        "list": code( outer.argument ),
+                        "start": code( argument[0] ),
+                        "delete": code( 0 ),
+                        "insert": code( [ argument[1] ] )
+                    });
+                    return;
+                };
+            };
+        }
+    """,
+    "remove": """
+        function(Any) {
+            return dynamic function(List<outer.argument>) noexit {
+                return function(Integer) noexit {
+                    exec({
+                        "opcode": "splice",
+                        "list": code( outer.argument ),
+                        "start": code( argument ),
+                        "delete": code( 1 )
+                    });
+                    return;
+                };
+            };
+        }
+    """,
+}
 
 class ListManager(CompositeManager):
     type = ListType
 
-    def create_add_function(self, type):
-        from rdhlang4.parser.rdhparser import prepare_code
-
-        factory = prepare_code("""
-            function(Any) {
-                return dynamic function(List<outer.argument>) noexit {
-                    return function(outer.outer.argument) nothrow noexit {
-                        exec({
-                            "opcode": "splice",
-                            "list": code( outer.argument ),
-                            "end": code( 0 ),
-                            "delete": code( 0 ),
-                            "insert": code( [ argument ] )
-                        });
-                        return;
-                    };
-                };
-            }
-        """, check_application_break_mode_constraints=False, include_stdlib=False)
-
-        return factory.invoke(type.to_dict()).invoke(self.obj)
-
     def get_key_value(self, key, accessing_type):
-        if key == "add":
-            return self.create_add_function(accessing_type.wildcard_type)
+        if key in LIST_METHODS:
+            from rdhlang4.parser.rdhparser import prepare_code
+            factory = prepare_code(
+                LIST_METHODS[key], check_application_break_mode_constraints=False, include_stdlib=False
+            )
+            return factory.invoke(accessing_type.wildcard_type.to_dict()).invoke(self.obj)
         if not isinstance(key, int):
             raise InvalidDereferenceError()
+        if key < 0:
+            key += len(self.obj)
         if key >= 0 and key < len(self.obj):
             return self.obj[key]
         else:
@@ -438,45 +486,44 @@ class ListManager(CompositeManager):
     def set_key_value(self, key, new_value):
         if not isinstance(key, int):
             raise InvalidDereferenceError()
+        if key < 0:
+            key += len(self.obj)
         self.obj[key] = new_value
 
-    def check_slice(self, start, end, delete, insert):
+    def splice(self, start, end, delete, insert):
         if not (bool(isinstance(start, int)) ^ bool(isinstance(end, int))):
             raise InvalidSpliceParametersError()
 
-        if (not isinstance(delete, int)
-            or not isinstance(insert, List)
-        ):
+        if not isinstance(delete, int):
             raise InvalidSpliceParametersError()
 
         if delete < 0:
             raise InvalidSpliceModificationError()
 
-        list_len = len(self.obj)
+        if(insert is not MISSING
+           and not isinstance(insert, List)
+        ):
+            raise InvalidSpliceParametersError()    
 
-        if start is not MISSING:
-            if start < 0 or start > list_len or start + delete > list_len:
-                raise InvalidSpliceModificationError()
+        if start is MISSING:
+            start = len(self.obj) - end
 
-        if end is not MISSING:
-            if end < 0 or end > list_len or end < delete:
-                raise InvalidSpliceModificationError()
+        if start + delete > len(self.obj):
+            raise InvalidSpliceParametersError()
 
-    def splice(self, start, end, delete, insert):
-        self.check_slice(start, end, delete, insert)
-        list_len = len(self.obj)
+        new_list = self.obj.wrapped[:start]
+        if insert is not MISSING:
+            new_list = new_list + insert.wrapped
+        new_list = new_list + self.obj.wrapped[start + delete:]
 
-        try:
-            for _ in range(delete):
-                if start is not MISSING:
-                    self.obj.pop(start)
-                else:
-                    self.obj.pop(list_len - end)
-    
-            for insert_element in reversed(insert):
-                if start is not MISSING:
-                    self.obj.insert(start, insert_element)
-                else:
-                    self.obj.insert(list_len - end, insert_element)
-        except Exception:
-            raise FatalException()
+        for index, value in enumerate(new_list):
+            self.check_assignment(index, value)
+
+        for index, value in enumerate(new_list):
+            if len(self.obj) > index:
+                self.obj[index] = value
+            else:
+                self.obj.append(value)
+
+        for index in range(len(self.obj) - len(new_list)):
+            self.obj.pop()

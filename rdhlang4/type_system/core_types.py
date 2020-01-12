@@ -6,8 +6,7 @@ import threading
 
 from rdhlang4.exception_types import DataIntegrityError, CrystalValueCanNotBeGenerated, \
     InvalidDereferenceError
-from rdhlang4.utils import MISSING, InternalMarker, default
-
+from rdhlang4.utils import MISSING, InternalMarker
 
 def are_bindable(first, second, first_is_rev_const, second_is_rev_const, result_cache):
     """
@@ -571,6 +570,41 @@ class RemoveRevConst(object):
 
         return self.results[id(original_type)]
 
+LIST_METHOD_TYPES = None
+
+def get_list_method_types():
+    from rdhlang4.executor.executor import DereferenceOpcode
+    from rdhlang4.executor.executor import SpliceOpcode
+    global LIST_METHOD_TYPES
+    if LIST_METHOD_TYPES is None:
+        LIST_METHOD_TYPES = {
+            "push": lambda list_type: FunctionType(list_type.wildcard_type, { "return": NoValueType() }),
+            "pop": lambda list_type: FunctionType(NoValueType(), {
+                "return": list_type.wildcard_type,
+                "exception": merge_types([
+                    DereferenceOpcode.INVALID_DEREFERENCE.get_type(),
+                    SpliceOpcode.INVALID_MODIFICATION.get_type()
+                ])
+            }),
+            "add": lambda list_type: FunctionType(
+                ListType([ IntegerType(), list_type.wildcard_type ], NoType(), False), {
+                    "return": NoValueType(),
+                    "exception": merge_types([
+                        DereferenceOpcode.INVALID_DEREFERENCE.get_type(),
+                        SpliceOpcode.INVALID_MODIFICATION.get_type()
+                    ])
+                }
+            ),
+            "remove": lambda list_type: FunctionType(IntegerType(), {
+                "return": NoValueType(),
+                "exception": merge_types([
+                    DereferenceOpcode.INVALID_DEREFERENCE.get_type(),
+                    SpliceOpcode.INVALID_MODIFICATION.get_type()
+                ])
+            }),
+        }
+    return LIST_METHOD_TYPES
+
 class ListType(CompositeType):
     def __init__(self, entry_types, wildcard_type, is_rev_const, *args, **kwargs):
         super(ListType, self).__init__(*args, **kwargs)
@@ -589,11 +623,14 @@ class ListType(CompositeType):
         return list(range(len(self.entry_types)))
 
     def get_key_type(self, key):
-        if key == "add":
-            return FunctionType(self.wildcard_type, { "return": NoValueType() }), False
+        list_method_types = get_list_method_types()
+        if key in list_method_types:
+            return list_method_types[key](self), False
         if not isinstance(key, int):
             raise InvalidDereferenceError()
-        if key >= 0 and key < len(self.entry_types):
+        if key < 0 and len(self.entry_types) > 0:
+            return NoType(), True
+        elif 0 <= key < len(self.entry_types):
             return self.entry_types[key], False
         else:
             return self.wildcard_type, True
@@ -640,6 +677,18 @@ class ListType(CompositeType):
             ],
             "wildcard_type": self.wildcard_type.to_dict()
         }
+
+def splice_list_types(target, start, delete, insert):
+    before_break = target.entry_types[:start] + [ target.wildcard_type ] * max(0, start - len(target.entry_types))
+    after_break = target.entry_types[start + delete:]
+
+    new_entry_types = before_break + insert.entry_types + after_break
+
+    return ListType(
+        new_entry_types,
+        merge_types([ target.wildcard_type, insert.wildcard_type ]),
+        True
+    )
 
 class FunctionType(Type):
 
