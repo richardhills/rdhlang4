@@ -15,7 +15,7 @@ from rdhlang4.exception_types import DataIntegrityError, InvalidCompositeObject,
     InvalidSpliceModificationError
 from rdhlang4.type_system.core_types import Type, VISIT_CHILDREN, ObjectType, \
     ListType, UnknownType, UnitType, PythonFunction, NoValueType, CREATE_NEW_TYPE, \
-    AnyType, are_bindable, compare_composite_types, CompositeType, NoType
+    AnyType, are_bindable, compare_composite_types, CompositeType, OneOfType
 from rdhlang4.utils import MISSING, NO_VALUE
 
 
@@ -136,7 +136,7 @@ class CrystalTypeCreator(object):
             if isinstance(value, (list, List)):
                 result = ListType([
                     self.find_or_create_crystal_type(p, None) for p in value
-                ], NoType(), self.set_is_rev_const)
+                ], OneOfType([ AnyType(is_const=True), NoValueType() ], is_const=True), self.set_is_rev_const)
                 result.original_value_id = id(value)
                 return result
             if isinstance(value, tuple):
@@ -309,10 +309,7 @@ class CompositeManager(object):
         new_value_crystal_type = create_crystal_type(new_value, True)
         for other_type_reference in self.get_type_references():
             if isinstance(other_type_reference, CompositeType):
-                other_key_type, _ = other_type_reference.get_key_type(key)
-
-                if isinstance(other_key_type, NoType):
-                    continue
+                other_key_type = other_type_reference.get_key_type(key)
 
                 if not other_key_type.is_copyable_from(new_value_crystal_type, {}):
                     raise IncompatableAssignmentError()

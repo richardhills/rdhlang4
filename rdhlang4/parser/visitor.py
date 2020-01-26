@@ -782,14 +782,19 @@ class RDHLang4Visitor(langVisitor):
         return object_type(properties, ctx if self.debug else None)
 
     def visitListType(self, ctx):
+        wildcard_type = const_modifier_op(
+            one_of_type([
+                self.visit(ctx.expression()), type_op("NoValue", ctx if self.debug else None)
+            ], ctx if self.debug else None)
+        )
         return list_type(
-            [], self.visit(ctx.expression()), ctx if self.debug else None
+            [], wildcard_type, ctx if self.debug else None
         )
 
     def visitTupleType(self, ctx):
         return list_type([
                 self.visit(e) for e in ctx.expression()
-            ], type_op("NoType"), ctx if self.debug else None
+            ], type_op("NoValue"), ctx if self.debug else None
         )
 
     def visitPropertyType(self, ctx):

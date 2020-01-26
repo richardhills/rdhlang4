@@ -12,7 +12,8 @@ from rdhlang4.executor.executor import PreparedFunction, PreparationException, \
 from rdhlang4.executor.stdlib import add_function
 from rdhlang4.parser.rdhparser import parse, prepare_code
 from rdhlang4.type_system.core_types import ObjectType, IntegerType, merge_types, \
-    RemoveRevConst, are_break_types_equal, ListType, AnyType, StringType
+    RemoveRevConst, are_break_types_equal, ListType, AnyType, StringType, \
+    OneOfType, NoValueType
 from rdhlang4.type_system.values import Object, List, get_manager
 from rdhlang4.utils import NO_VALUE
 
@@ -698,11 +699,22 @@ class TestMiscelaneous(TestCase):
     def test15(self):
         function = prepare_code("""
             function() {
-              Tuple<Integer> foo = [ 1, 2 ];
+              Tuple<Integer, Integer> foo = [ 1, 2 ];
               return foo[1];
             }
         """)
         self.assertEquals(function.invoke(), 2)
+
+    def test16(self):
+        function = prepare_code("""
+            function() {
+               List<Integer> foo = [ 1, 2, 3, 42 ];
+               foo[100] = 123;
+               return foo;
+            }
+        """)
+        with self.assertRaises(BreakException):
+            function.invoke()
 
 class TestEuler(TestCase):
 #     def testProblem1a(self):
@@ -776,42 +788,42 @@ broken_argument_set_first_list_element = prepare_code("""
 
 class TestDynamicFunctions(TestCase):
     def test_set_element_integer(self):
-        numbers = List([ 4, 5 ])
-        get_manager(numbers).create_reference(ListType([], IntegerType(), False), False)
+        numbers = List([ 4 ])
+#        get_manager(numbers).create_reference(ListType([], OneOfType([ IntegerType(), NoValueType() ]), False), False)
 
         integer_set_function = set_first_list_element.invoke(Object({ "type": "Integer" }))
         integer_set_function.invoke(List([ numbers, 42 ]))
 
-        self.assertEqual(numbers, List([ 42, 5 ]))
+        self.assertEqual(numbers, List([ 42 ]))
 
     def test_set_element_string(self):
-        words = List([ "hello", "world" ])
-        get_manager(words).create_reference(ListType([], StringType(), False), False)
+        words = List([ "hello" ])
+#        get_manager(words).create_reference(ListType([], OneOfType([ StringType(), NoValueType() ]), False), False)
 
         string_set_function = set_first_list_element.invoke(Object({ "type": "String" }))
         string_set_function.invoke(List([ words, "hi" ]))
 
-        self.assertEqual(words, List([ "hi", "world" ]))
+        self.assertEqual(words, List([ "hi" ]))
 
     def test_broken_works_with_int_set_element_string(self):
-        numbers = List([ 4, 5 ])
-        get_manager(numbers).create_reference(ListType([], IntegerType(), False), False)
+        numbers = List([ 4 ])
+#        get_manager(numbers).create_reference(ListType([], OneOfType([ IntegerType(), NoValueType() ]), False), False)
 
         integer_set_function = set_first_list_element.invoke(Object({ "type": "Integer" }))
         integer_set_function.invoke(List([ numbers, 42 ]))
 
-        self.assertEqual(numbers, List([ 42, 5 ]))
+        self.assertEqual(numbers, List([ 42 ]))
 
     def test_broken_set_element_string(self):
-        words = List([ "hello", "world" ])
-        get_manager(words).create_reference(ListType([], StringType(), False), False)
+#        words = List([ "hello" ])
+#        get_manager(words).create_reference(ListType([], OneOfType([ StringType(), NoValueType() ]), False), False)
 
         with self.assertRaises(BreakException):
             broken_argument_set_first_list_element.invoke(Object({ "type": "String" }))
 
     def test_other_constraint_breaks_dynamic_function(self):
-        words = List([ "hello", "world" ])
-        get_manager(words).create_reference(ListType([], AnyType(), False), False)
+        words = List([ "hello" ])
+        get_manager(words).create_reference(ListType([], OneOfType([ AnyType(), NoValueType() ]), False), False)
 
         string_set_function = set_first_list_element.invoke(Object({ "type": "String" }))
         with self.assertRaises(BreakException):

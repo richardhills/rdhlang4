@@ -11,7 +11,7 @@ from munch import munchify
 from rdhlang4.exception_types import CreateReferenceError, IncompatableAssignmentError
 from rdhlang4.type_system.core_types import merge_types, \
     OneOfType, ObjectType, IntegerType, BooleanType, AnyType, UnitType, \
-    are_bindable, StringType, ListType, NoValueType, NoType
+    are_bindable, StringType, ListType, NoValueType
 from rdhlang4.type_system.values import Object, List, get_manager, \
     create_crystal_type
 
@@ -354,78 +354,83 @@ class TestCompileTimeListChecks(TestCase):
     maxDiff = 65536
 
     def test_successful_simple_compile_time_list_assignment(self):
-        foo = ListType([], IntegerType(), False)
-        other_foo = ListType([], IntegerType(), False)
+        foo = ListType([], OneOfType([IntegerType(), NoValueType()]), False)
+        other_foo = ListType([], OneOfType([IntegerType(), NoValueType()]), False)
 
         self.assertTrue(foo.is_copyable_from(other_foo, {}))
 
     def test_failed_simple_compile_time_list_assignment(self):
-        foo = ListType([], AnyType(), False)
-        other_foo = ListType([], IntegerType(), False)
+        foo = ListType([], OneOfType([AnyType(), NoValueType()]), False)
+        other_foo = ListType([], OneOfType([IntegerType(), NoValueType()]), False)
 
         # Blocked because it would allows foo[0] = "hello" - looking at you Java
         self.assertFalse(foo.is_copyable_from(other_foo, {}))
 
     def test_successful_simple_rev_const_compile_time_list_assignment(self):
-        foo = ListType([], AnyType(), False)
-        other_foo = ListType([], IntegerType(), True)
+        foo = ListType([], OneOfType([AnyType(), NoValueType()]), False)
+        other_foo = ListType([], OneOfType([IntegerType(), NoValueType()]), True)
 
         self.assertTrue(foo.is_copyable_from(other_foo, {}))
 
     def test_successful_simple_compile_time_tuple_assignment(self):
-        foo = ListType([ IntegerType(), StringType() ], AnyType(), False)
-        other_foo = ListType([ IntegerType(), StringType() ], AnyType(), False)
+        foo = ListType([ IntegerType(), StringType() ], OneOfType([AnyType(), NoValueType()]), False)
+        other_foo = ListType([ IntegerType(), StringType() ], OneOfType([AnyType(), NoValueType()]), False)
 
         self.assertTrue(foo.is_copyable_from(other_foo, {}))
 
     def test_failed_simple_compile_time_tuple_to_list_assignment(self):
-        foo = ListType([], AnyType(), False)
-        other_foo = ListType([ IntegerType(), StringType() ], NoType(), False)
+        foo = ListType([], OneOfType([AnyType(), NoValueType()]), False)
+        other_foo = ListType([ IntegerType(), StringType() ], OneOfType([AnyType(), NoValueType()]), False)
 
         # Blocked because it would allow foo[0] = "hello";
         self.assertFalse(foo.is_copyable_from(other_foo, {}))
 
     def test_successful_simple_compile_time_rev_const_tuple_to_list_assignment(self):
-        foo = ListType([], AnyType(), False)
-        other_foo = ListType([ IntegerType(), StringType() ], NoType(), True)
+        foo = ListType([], OneOfType([AnyType(), NoValueType()]), False)
+        other_foo = ListType([ IntegerType(), StringType() ], OneOfType([IntegerType(), NoValueType()]), True)
 
         # Allowed because other_foo is rev const, so foo[0] = "hello" wont break it
         self.assertTrue(foo.is_copyable_from(other_foo, {}))
 
     def test_failed_incompatible_type_compile_time_tuple_to_list_assignment(self):
-        foo = ListType([], IntegerType(), False)
-        other_foo = ListType([ IntegerType(), StringType() ], NoType(), True)
+        foo = ListType([], OneOfType([IntegerType(), NoValueType()]), False)
+        other_foo = ListType([ IntegerType(), StringType() ], OneOfType([IntegerType(), NoValueType()]), True)
 
         # Blocked because it would allow foo[1] = 42
         self.assertFalse(foo.is_copyable_from(other_foo, {}))
 
     def test_successful_type_compile_time_same_type_tuple_to_list_assignment(self):
-        foo = ListType([], IntegerType(), False)
-        other_foo = ListType([ IntegerType(), IntegerType() ], NoType(), False)
+        foo = ListType([], OneOfType([IntegerType(), NoValueType()]), False)
+        other_foo = ListType([ IntegerType(), IntegerType() ], OneOfType([IntegerType(), NoValueType()]), True)
 
-        # Allowed because foo.add(1) wont break the rev_const other_foo
+        # Allowed because foo.delete(1) wont break the rev_const other_foo
         self.assertTrue(foo.is_copyable_from(other_foo, {}))
 
     def test_failed_incompatible_type_list_to_tuple_assignment(self):
-        foo = ListType([IntegerType(), IntegerType(), IntegerType()], IntegerType(), False)
-        other_foo = ListType([], IntegerType(), False)
+        foo = ListType([IntegerType(), IntegerType(), IntegerType()], OneOfType([IntegerType(), NoValueType()]), False)
+        other_foo = ListType([], OneOfType([IntegerType(), NoValueType()]), False)
 
         # Blocked because other_foo[0] might fail, but foo[0] can not
         self.assertFalse(foo.is_copyable_from(other_foo, {}))
 
     def test_successful_truncated_tuple(self):
-        foo = ListType([IntegerType()], NoType(), False)
-        other_foo = ListType([IntegerType(), IntegerType(), IntegerType()], NoType(), False)
+        foo = ListType([IntegerType()], OneOfType([ AnyType(), NoValueType() ], is_const=True), False)
+        other_foo = ListType([IntegerType(), IntegerType(), IntegerType()], NoValueType(), False)
 
-        # Allowed because foo.add, foo.slice etc can be blocked on tuples, and
-        # other_foo provides more than enough values for foo
         self.assertTrue(foo.is_copyable_from(other_foo, {}))
 
     def test_failed_truncated_tuple(self):
-        foo = ListType([IntegerType(), IntegerType(), IntegerType()], NoType(), False)
-        other_foo = ListType([IntegerType()], NoType(), False)
+        foo = ListType([IntegerType(), IntegerType(), IntegerType()], NoValueType(), False)
+        other_foo = ListType([IntegerType()], NoValueType(), False)
 
         # Blocked because other_foo can't set a value for foo[1]
+        self.assertFalse(foo.is_copyable_from(other_foo, {}))
+
+    def test_failed_list_tuple_covariance(self):
+        foo = ListType([], OneOfType([ IntegerType(), NoValueType() ], is_const=True), False)
+        other_foo = ListType([], OneOfType([ AnyType(), NoValueType() ], is_const=True), False)
+
+        # Fails because other_foo[0] might be "hello".
         self.assertFalse(foo.is_copyable_from(other_foo, {}))
 
 
@@ -474,6 +479,12 @@ class TestCompileTimeUnitTypeChecks(TestCase):
 
 
 class TestCompileTimeOneOfTypeChecks(TestCase):
+    def test_no_value_types_preserved(self):
+        merged = merge_types([ IntegerType(), NoValueType() ])
+        self.assertIsInstance(merged, OneOfType)
+        self.assertIsInstance(merged.types[0], IntegerType)
+        self.assertIsInstance(merged.types[1], NoValueType)
+
     def test_unitary_one_of_type(self):
         self.assertTrue(
             are_bindable(
@@ -901,92 +912,85 @@ class TestRuntimeListTypeCastingChecks(TestCase):
     def test_successful_empty_list_create_reference(self):
         foo = List([])
 
-        get_manager(foo).create_reference(ListType([], IntegerType(), False), False)
+        get_manager(foo).create_reference(ListType([], OneOfType([ IntegerType(), NoValueType() ]), False), False)
 
     def test_successful_integer_list_create_reference(self):
         foo = List([5, 3, 7])
 
-        get_manager(foo).create_reference(ListType([], IntegerType(), False), False)
+        get_manager(foo).create_reference(ListType([], OneOfType([ IntegerType(), NoValueType() ]), False), False)
 
     def test_successful_integer_list_create_reference2(self):
         foo = List([5, 3, 7])
 
-        get_manager(foo).create_reference(ListType([], AnyType(), False), False)
+        get_manager(foo).create_reference(ListType([], OneOfType([ AnyType(), NoValueType() ]), False), False)
 
     def test_successful_integer_list_create_reference3(self):
         foo = List([5, 3, 7])
 
-        get_manager(foo).create_reference(ListType([ IntegerType() ], IntegerType(), False), False)
+        get_manager(foo).create_reference(ListType([ IntegerType() ], OneOfType([IntegerType(), NoValueType()]), False), False)
 
     def test_successful_integer_list_create_reference4(self):
         foo = List([5, 3, 7])
 
-        get_manager(foo).create_reference(ListType([ AnyType() ], IntegerType(), False), False)
+        get_manager(foo).create_reference(ListType([ AnyType() ], OneOfType([IntegerType(), NoValueType()]), False), False)
 
     def test_successful_integer_list_create_reference5(self):
         foo = List([5, 3, 7])
 
-        get_manager(foo).create_reference(ListType([ AnyType(), AnyType(), AnyType() ], NoType(), False), False)
-
-#     def test_failed_integer_list_create_reference(self):
-#        No way at the moment to say "don't accept extra entry types"
-#         foo = List([5, 3, 7])
-# 
-#         with self.assertRaises(CreateReferenceError):
-#             get_manager(foo).create_reference(ListType([ AnyType() ], NoType(), False), False)
+        get_manager(foo).create_reference(ListType([ AnyType(), AnyType(), AnyType() ], NoValueType(), False), False)
 
     def test_failed_integer_list_create_reference2(self):
         foo = List([5, 3, 7])
 
         with self.assertRaises(CreateReferenceError):
-            get_manager(foo).create_reference(ListType([ AnyType() ], StringType(), False), False)
+            get_manager(foo).create_reference(ListType([ AnyType() ], OneOfType([StringType(), NoValueType()]), False), False)
 
     def test_failed_integer_list_create_reference3(self):
         foo = List([5, 3, 7])
 
         with self.assertRaises(CreateReferenceError):
-            get_manager(foo).create_reference(ListType([ StringType() ], AnyType(), False), False)
+            get_manager(foo).create_reference(ListType([ StringType() ], OneOfType([AnyType(), NoValueType()]), False), False)
 
     def test_failed_multiple_list_create_reference1A(self):
         foo = List([5, 3, 7])
 
-        get_manager(foo).create_reference(ListType([], IntegerType(), False), False)
+        get_manager(foo).create_reference(ListType([], OneOfType([IntegerType(), NoValueType()]), False), False)
         with self.assertRaises(CreateReferenceError):
-            get_manager(foo).create_reference(ListType([], AnyType(), False), False)
+            get_manager(foo).create_reference(ListType([], OneOfType([AnyType(), NoValueType()]), False), False)
 
     def test_failed_multiple_list_create_reference1B(self):
         foo = List([5, 3, 7])
 
-        get_manager(foo).create_reference(ListType([], AnyType(), False), False)
+        get_manager(foo).create_reference(ListType([], OneOfType([AnyType(), NoValueType()]), False), False)
         with self.assertRaises(CreateReferenceError):
-            get_manager(foo).create_reference(ListType([], IntegerType(), False), False)
+            get_manager(foo).create_reference(ListType([], OneOfType([StringType(), NoValueType()]), False), False)
 
     def test_failed_multiple_list_create_reference2A(self):
         foo = List([5, 3, 7])
 
-        get_manager(foo).create_reference(ListType([ IntegerType() ], AnyType(), False), False)
+        get_manager(foo).create_reference(ListType([ IntegerType() ], OneOfType([AnyType(), NoValueType()]), False), False)
         with self.assertRaises(CreateReferenceError):
-            get_manager(foo).create_reference(ListType([], AnyType(), False), False)
+            get_manager(foo).create_reference(ListType([], OneOfType([AnyType(), NoValueType()]), False), False)
 
     def test_failed_multiple_list_create_reference2B(self):
         foo = List([5, 3, 7])
 
-        get_manager(foo).create_reference(ListType([], AnyType(), False), False)
+        get_manager(foo).create_reference(ListType([], OneOfType([AnyType(), NoValueType()]), False), False)
         with self.assertRaises(CreateReferenceError):
-            get_manager(foo).create_reference(ListType([ IntegerType() ], AnyType(), False), False)
+            get_manager(foo).create_reference(ListType([ IntegerType() ], OneOfType([AnyType(), NoValueType()]), False), False)
 
 
     def test_successful_multiple_list_create_reference1(self):
         foo = List([5, 3, 7])
 
-        get_manager(foo).create_reference(ListType([], AnyType(), False), False)
-        get_manager(foo).create_reference(ListType([], AnyType(), False), False)
+        get_manager(foo).create_reference(ListType([], OneOfType([AnyType(), NoValueType()]), False), False)
+        get_manager(foo).create_reference(ListType([], OneOfType([AnyType(), NoValueType()]), False), False)
 
     def test_successful_multiple_list_create_reference2(self):
         foo = List([5, 3, 7])
 
-        get_manager(foo).create_reference(ListType([ IntegerType() ], AnyType(), False), False)
-        get_manager(foo).create_reference(ListType([ IntegerType() ], AnyType(), False), False)
+        get_manager(foo).create_reference(ListType([ IntegerType() ], OneOfType([AnyType(), NoValueType()]), False), False)
+        get_manager(foo).create_reference(ListType([ IntegerType() ], OneOfType([AnyType(), NoValueType()]), False), False)
 
 if __name__ == '__main__':
     unittest.main()

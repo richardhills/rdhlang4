@@ -17,7 +17,7 @@ from rdhlang4.parser.visitor import nop, context_op, literal_op, type_op
 from rdhlang4.type_system.core_types import UnitType, ObjectType, Type, NoValueType, \
     merge_types, AnyType, FunctionType, IntegerType, BooleanType, StringType, \
     InferredType, OneOfType, ListType, PythonFunction, RemoveRevConst, \
-    CompositeType, NoType, safe_get_crystal_value, splice_list_types
+    CompositeType, safe_get_crystal_value, splice_list_types, expand_types
 from rdhlang4.type_system.values import Object, List, \
     get_manager, create_crystal_type
 from rdhlang4.utils import InternalMarker, MISSING, NO_VALUE, spread_dict
@@ -74,8 +74,11 @@ def merge_break_types(breaks_types):
             if not isinstance(type, Type):
                 raise FatalException()
 
-            previous_break_type = result.get(mode, NoType())
-            new_break_type = merge_types([previous_break_type, type])
+            previous_break_type = result.get(mode, None)
+            if previous_break_type:
+                new_break_type = merge_types([previous_break_type, type])
+            else:
+                new_break_type = type
             result[mode] = new_break_type
     return result
 
@@ -413,6 +416,7 @@ class AssignmentOpcode(Opcode):
             break_types.append({
                 "exception": self.INVALID_ASSIGNMENT.get_type(),
             })
+
         return merge_break_types(break_types)
 
     def jump(self, context):
@@ -516,7 +520,7 @@ class NewTupleOpcode(Opcode):
 
         return merge_break_types(
             other_breaks_types + [{
-                "value": ListType(value_types, NoType(), True)
+                "value": ListType(value_types, NoValueType(), True)
             }]
         )
 
@@ -812,23 +816,29 @@ class DereferenceOpcode(Opcode):
         self.reference = enrich_opcode(self.data["reference"], visitor)
         self.of = enrich_opcode(self.data["of"], visitor)
 
+    def get_reference_and_of_types(self, context):
+        reference_type, _ = get_expression_break_types(self.reference, context)
+        of_type, _ = get_expression_break_types(self.of, context)
+        return reference_type, of_type
+
     def get_break_types(self, context):
         reference_type, reference_break_types = get_expression_break_types(self.reference, context)
-
-        invalid_dereference_possible = False
 
         of_type, of_break_types = get_expression_break_types(self.of, context)
         break_types = [ reference_break_types, of_break_types ]
 
         crystal_reference_value = reference_type.get_crystal_value()
 
+        invalid_dereference_possible = False
+
         if isinstance(of_type, CompositeType):
             try:
-                value_type, is_wildcard = of_type.get_key_type(crystal_reference_value)
-                if is_wildcard:
-                    invalid_dereference_possible = True
-                    if isinstance(value_type, NoType):
-                        value_type = AnyType()
+                value_type = of_type.get_key_type(crystal_reference_value)
+                for t in expand_types(value_type):
+                    if isinstance(t, NoValueType):
+                        invalid_dereference_possible = True
+                if isinstance(value_type, OneOfType):
+                    value_type = value_type.clone_without_NoValueTypes()
             except InvalidDereferenceError:
                 invalid_dereference_possible = True
                 value_type = AnyType()
@@ -841,7 +851,7 @@ class DereferenceOpcode(Opcode):
                 "exception": self.INVALID_DEREFERENCE.get_type()
             })
 
-        if value_type is not MISSING:
+        if not isinstance(value_type, NoValueType):
             break_types.append({
                 "value": value_type
             })
@@ -871,28 +881,16 @@ class DereferenceOpcode(Opcode):
         return "Dereference< {}.{} >".format(self.of, self.reference)
 
 
-def dynamic_get_reference_and_of_manager(context, reference):
-    argument = getattr(context, "argument", MISSING)
-    if argument is not MISSING and isinstance(argument, Object) and reference in argument:
-        return reference, get_manager(argument)
-
-    local = getattr(context, "local", MISSING)
-    if local is not MISSING and isinstance(local, Object) and reference in local:
-        return reference, get_manager(local)
-
-    outer = getattr(context, "outer", MISSING)
-    if outer is not MISSING and isinstance(outer, Object):
-        return dynamic_get_reference_and_of_manager(outer, reference)
-
-    return MISSING  # Meaning we couldn't find it
-
-
 class DynamicDereferenceOpcode(Opcode):
     INVALID_DEREFERENCE = TypeErrorFactory("DynamicDereferenceOpcode: invalid_dereference")
 
     def __init__(self, data, visitor):
         super(DynamicDereferenceOpcode, self).__init__(data)
         self.reference = enrich_opcode(self.data["reference"], visitor)
+
+    def get_reference_and_of_types(self, context):
+        reference_type, _ = get_expression_break_types(self.reference, context)
+        return reference_type, AnyType()
 
     def get_break_types(self, context):
         _, reference_break_types = get_expression_break_types(self.reference, context)
@@ -907,18 +905,33 @@ class DynamicDereferenceOpcode(Opcode):
     def get_reference_and_of_manager(self, context):
         reference = evaluate(self.reference, context)
 
-        search_result = dynamic_get_reference_and_of_manager(context, reference)
+        search_result = self.dynamic_get_reference_and_of_manager(context, reference)
         if search_result is not MISSING:
             return search_result
 
         # Fall back on it being a local variable
         return reference, get_manager(getattr(context, "local", MISSING))
 
+    def dynamic_get_reference_and_of_manager(self, context, reference):
+        argument = getattr(context, "argument", MISSING)
+        if argument is not MISSING and isinstance(argument, Object) and reference in argument:
+            return reference, get_manager(argument)
+    
+        local = getattr(context, "local", MISSING)
+        if local is not MISSING and isinstance(local, Object) and reference in local:
+            return reference, get_manager(local)
+    
+        outer = getattr(context, "outer", MISSING)
+        if outer is not MISSING and isinstance(outer, Object):
+            return self.dynamic_get_reference_and_of_manager(outer, reference)
+    
+        return MISSING  # Meaning we couldn't find it
+
     def jump(self, context):
         try:
             reference, of_manager = self.get_reference_and_of_manager(context)
 
-            value = of_manager.get_key_value(reference, NoType())
+            value = of_manager.get_key_value(reference, AnyType())
         except InvalidCompositeObject:
             raise self.INVALID_DEREFERENCE()
         except InvalidDereferenceError:
@@ -1077,31 +1090,28 @@ def create_function_type_from_data(data):
     })
 
 
-def get_is_const(data):
-    return data.get("is_const", False)
-
+def get_modifiers(data):
+    return {
+        "is_const": data.get("is_const", False)
+    }
 
 TYPES = {
-    "Any": lambda data: AnyType(is_const=get_is_const(data)),
+    "Any": lambda data: AnyType(**get_modifiers(data)),
     "Object": lambda data: ObjectType({
         name: enrich_type(type) for name, type in data["properties"].items()
-    }, is_rev_const=False, is_const=get_is_const(data)),
+    }, is_rev_const=False, **get_modifiers(data)),
     "List": lambda data: ListType(
         [ enrich_type(type) for type in data["entry_types"] ],
         enrich_type(data["wildcard_type"]),
-        is_rev_const=False, is_const=get_is_const(data)
+        is_rev_const=False, **get_modifiers(data)
     ),
-    "OneOf": lambda data: OneOfType(
-        [ enrich_type(type) for type in data["types"] ],
-        is_const=get_is_const(data)
-    ),
-    "Integer": lambda data: IntegerType(is_const=get_is_const(data)),
-    "Boolean": lambda data: BooleanType(is_const=get_is_const(data)),
+    "OneOf": lambda data: merge_types([ enrich_type(type) for type in data["types"] ], **get_modifiers(data)),
+    "Integer": lambda data: IntegerType(**get_modifiers(data)),
+    "Boolean": lambda data: BooleanType(**get_modifiers(data)),
     "NoValue": lambda data: NoValueType(),
-    "NoType": lambda data: NoType(),
-    "String": lambda data: StringType(is_const=get_is_const(data)),
+    "String": lambda data: StringType(**get_modifiers(data)),
     "Function": create_function_type_from_data,
-    "Inferred": lambda data: InferredType(is_const=get_is_const(data)),
+    "Inferred": lambda data: InferredType(**get_modifiers(data)),
     "Unit": lambda data: UnitType(data["value"])
 }
 

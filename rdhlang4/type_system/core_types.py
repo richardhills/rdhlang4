@@ -5,8 +5,9 @@ from __future__ import unicode_literals
 import threading
 
 from rdhlang4.exception_types import DataIntegrityError, CrystalValueCanNotBeGenerated, \
-    InvalidDereferenceError
-from rdhlang4.utils import MISSING, InternalMarker
+    InvalidDereferenceError, FatalException
+from rdhlang4.utils import MISSING, InternalMarker, NO_VALUE
+
 
 def are_bindable(first, second, first_is_rev_const, second_is_rev_const, result_cache):
     """
@@ -27,6 +28,8 @@ def are_bindable(first, second, first_is_rev_const, second_is_rev_const, result_
         raise DataIntegrityError()
     if not isinstance(second, Type):
         raise DataIntegrityError()
+#     if first_is_rev_const and second_is_rev_const:
+#         raise FatalException()
 
     if first is second:
         return True
@@ -96,6 +99,8 @@ CREATE_NEW_TYPE = InternalMarker("CREATE_NEW_TYPE")
 class StringType(Type):
 
     def is_copyable_from(self, other, result_cache):
+        if isinstance(other, NoValueType):
+            return True
         if isinstance(other, StringType):
             return True
         if isinstance(other, UnitType) and isinstance(other.value, str):
@@ -134,6 +139,8 @@ class IntegerType(Type):
 class BooleanType(Type):
 
     def is_copyable_from(self, other, result_cache):
+        if isinstance(other, NoValueType):
+            return True
         if isinstance(other, BooleanType):
             return True
         if isinstance(other, UnitType) and isinstance(other.value, bool):
@@ -152,7 +159,9 @@ class BooleanType(Type):
 class AnyType(Type):
 
     def is_copyable_from(self, other, result_cache):
-        return not isinstance(other, NoValueType)
+        if isinstance(other, NoValueType):
+            return False
+        return True
 
     def to_dict(self):
         return {
@@ -193,31 +202,6 @@ class InferredType(Type):
     def __repr__(self):
         return "InferredType"
 
-class NoType(Type):
-    def is_copyable_from(self, other, result_cache):
-        return isinstance(other, NoType)
-
-    def to_dict(self):
-        return {
-            "type": "NoType"
-        }
-
-    def __repr__(self):
-        return "NoType"
-
-class NoValueType(Type):
-
-    def is_copyable_from(self, other, result_cache):
-        return isinstance(other, NoValueType)
-
-    def to_dict(self):
-        return {
-            "type": "NoValueType"
-        }
-
-    def __repr__(self):
-        return "NoValueType"
-
 class UnitType(Type):
 
     def __init__(self, value, *args, **kwargs):
@@ -225,6 +209,8 @@ class UnitType(Type):
         self.value = value
 
     def is_copyable_from(self, other, result_cache):
+        if isinstance(other, NoValueType):
+            return True
         return isinstance(other, UnitType) and other.value == self.value
 
     def get_crystal_value(self):
@@ -242,8 +228,27 @@ class UnitType(Type):
         else:
             return "UnitType<{}>".format(self.value)
 
+class NoValueType(Type):
+    """
+    A Type that represents a cell that can not take a value at all.
+    It can not be written to or read from.
+    """
+    def is_copyable_from(self, other, result_cache):
+        return isinstance(other, NoValueType)
+
+    def to_dict(self):
+        return {
+            "type": "NoValue"
+        }
+
+    def __repr__(self):
+        return "NoValueType"
+
 class UnknownType(Type):
     def is_copyable_from(self, other, result_cache):
+        if isinstance(other, NoValueType):
+            return True
+
         return False
 
     def to_dict(self):
@@ -257,11 +262,14 @@ class UnknownType(Type):
 def flatten_types(types):
     result = []
     for type in types:
-        if isinstance(type, OneOfType):
-            result.extend(flatten_types(type.types))
-        else:
-            result.append(type)
+        result.extend(expand_types(type))
     return result
+
+def expand_types(type):
+    if isinstance(type, OneOfType):
+        return type.types
+    else:
+        return [ type ]
 
 def dedupe_types(types):
     types_to_drop = list()
@@ -270,12 +278,12 @@ def dedupe_types(types):
     if len(types) == 1:
         return types
 
-    types_without_revconst = [t.visit(RemoveRevConst()) for t in types]
+    raw_types = [t.visit(RemoveRevConst()).visit(RemoveConst()) for t in types]
 
     result_cache = {}
 
-    for i1, (tr1, t1) in enumerate(zip(types, types_without_revconst)):
-        for i2, (tr2, t2) in enumerate(zip(types, types_without_revconst)):
+    for i1, (tr1, t1) in enumerate(zip(types, raw_types)):
+        for i2, (tr2, t2) in enumerate(zip(types, raw_types)):
             if i1 == i2:
                 continue
             if t1.is_copyable_from(tr2, result_cache):
@@ -285,30 +293,32 @@ def dedupe_types(types):
 
     return [ t for t in types if t not in types_to_drop ] + types_to_keep
 
-def merge_types(types):
+def merge_types(types, **modifiers):
     types = dedupe_types(flatten_types(types))
-    types = [t for t in types if not isinstance(t, NoType)]
     if len(types) == 0:
-        return NoType()
+        return NoValueType(**modifiers)
     elif len(types) == 1:
         return types[0]
     else:
-        return OneOfType(types)
+        return OneOfType(types, **modifiers)
 
 
 class OneOfType(Type):
 
     def __init__(self, types, *args, **kwargs):
         super(OneOfType, self).__init__(*args, **kwargs)
+        if not isinstance(types, list):
+            raise ValueError()
+        for t in types:
+            if isinstance(t, OneOfType):
+                raise ValueError()
         self.types = types
 
     def is_copyable_from(self, other, result_cache):
         if self is other:
             return True
 
-        types_that_need_checking = [ other ]
-        if isinstance(other, OneOfType):
-            types_that_need_checking = other.types
+        types_that_need_checking = expand_types(other)
         for other_type in types_that_need_checking:
             for our_type in self.types:
                 if our_type.is_copyable_from(other_type, result_cache):
@@ -317,9 +327,12 @@ class OneOfType(Type):
                 return False
         return True
 
+    def clone_without_NoValueTypes(self):
+        return OneOfType([ t for t in self.types if not isinstance(t, NoValueType) ])
+
     def to_dict(self):
         return {
-            "type": "OneOfType",
+            "type": "OneOf",
             "types": [t.to_dict() for t in self.types]
         }
 
@@ -373,8 +386,8 @@ def uncached_compare_composite_types(first, second, first_subset_of_second, seco
         return False
 
     for key_in_both in in_both:
-        first_key_type, _ = first.get_key_type(key_in_both)
-        second_key_type, _ = second.get_key_type(key_in_both)
+        first_key_type = first.get_key_type(key_in_both)
+        second_key_type = second.get_key_type(key_in_both)
 
         if not are_bindable(
             first_key_type,
@@ -385,33 +398,21 @@ def uncached_compare_composite_types(first, second, first_subset_of_second, seco
         ):
             return False
 
-    if not isinstance(first.wildcard_type, NoType):
-        for second_key in only_in_second:
-            second_key_type, _ = second.get_key_type(second_key)
-            if not are_bindable(
-                first.wildcard_type,
-                second_key_type,
-                first.is_rev_const,
-                second.is_rev_const,
-                result_cache
-            ):
-                return False
-
-    if not isinstance(second.wildcard_type, NoType):
-        for first_key in only_in_first:
-            first_key_type, _ = first.get_key_type(first_key)
-            if not are_bindable(
-                first_key_type,
-                second.wildcard_type,
-                first.is_rev_const,
-                second.is_rev_const,
-                result_cache
-            ):
-                return False
-
-    if not isinstance(first.wildcard_type, NoType) and not isinstance(second.wildcard_type, NoType):
+    for second_key in only_in_second:
+        second_key_type = second.get_key_type(second_key)
         if not are_bindable(
             first.wildcard_type,
+            second_key_type,
+            first.is_rev_const,
+            second.is_rev_const,
+            result_cache
+        ):
+            return False
+
+    for first_key in only_in_first:
+        first_key_type = first.get_key_type(first_key)
+        if not are_bindable(
+            first_key_type,
             second.wildcard_type,
             first.is_rev_const,
             second.is_rev_const,
@@ -419,9 +420,25 @@ def uncached_compare_composite_types(first, second, first_subset_of_second, seco
         ):
             return False
 
+    if not are_bindable(
+        first.wildcard_type,
+        second.wildcard_type,
+        first.is_rev_const,
+        second.is_rev_const,
+        result_cache
+    ):
+        return False
+
+    if first.is_sparse != second.is_sparse:
+        return False
+
     return True
 
 class CompositeType(Type):
+    wildcard_type = None
+    # Sparse means writing to undefined fields always works unless conflicting with another constraint
+    is_sparse = None
+
     def get_keys(self):
         raise NotImplementedError()
 
@@ -432,10 +449,13 @@ class CompositeType(Type):
         raise NotImplementedError()
 
     def is_copyable_from(self, other, result_cache):
+        if isinstance(other, NoValueType):
+            return True
         return compare_composite_types(self, other, True, False, result_cache)
 
 class ObjectType(CompositeType):
-    wildcard_type = NoType()
+    wildcard_type = OneOfType([ AnyType(is_const=True), NoValueType() ], is_const=True)
+    is_sparse = False
 
     def __init__(self, property_types, is_rev_const, *args, **kwargs):
         super(ObjectType, self).__init__(*args, **kwargs)
@@ -454,11 +474,7 @@ class ObjectType(CompositeType):
     def get_key_type(self, key):
         if not isinstance(key, str):
             raise InvalidDereferenceError()
-        key_type = self.property_types.get(key, MISSING)
-        if key_type is not MISSING:
-            return key_type, False
-        else:
-            return self.wildcard_type, True
+        return self.property_types.get(key, self.wildcard_type)
 
     def get_keys_and_types(self):
         return self.property_types.items()
@@ -564,11 +580,32 @@ class RemoveRevConst(object):
 
     def exit(self, original_type=None, new_type=None, key=None, obj=None):
         if id(original_type) not in self.results:
-            if isinstance(new_type, (ObjectType, ListType)) and new_type.is_rev_const:
+            if isinstance(new_type, CompositeType) and new_type.is_rev_const:
                 new_type.is_rev_const = False
             self.results[id(original_type)] = new_type
 
         return self.results[id(original_type)]
+
+class RemoveConst(object):
+    def __init__(self):
+        self.already_entered = set()
+        self.results = dict()
+
+    def enter(self, type, key=None, obj=None):
+        if id(type) in self.already_entered:
+            return (CREATE_NEW_TYPE,)
+        else:
+            self.already_entered.add(id(type))
+            return (CREATE_NEW_TYPE, VISIT_CHILDREN)
+
+    def exit(self, original_type=None, new_type=None, key=None, obj=None):
+        if id(original_type) not in self.results:
+            if isinstance(new_type, CompositeType) and new_type.is_const:
+                new_type.is_const = False
+            self.results[id(original_type)] = new_type
+
+        return self.results[id(original_type)]
+
 
 LIST_METHOD_TYPES = None
 
@@ -587,7 +624,7 @@ def get_list_method_types():
                 ])
             }),
             "add": lambda list_type: FunctionType(
-                ListType([ IntegerType(), list_type.wildcard_type ], NoType(), False), {
+                ListType([ IntegerType(), list_type.wildcard_type ], NoValueType(), False), {
                     "return": NoValueType(),
                     "exception": merge_types([
                         DereferenceOpcode.INVALID_DEREFERENCE.get_type(),
@@ -606,7 +643,11 @@ def get_list_method_types():
     return LIST_METHOD_TYPES
 
 class ListType(CompositeType):
+    is_sparse = True
+
     def __init__(self, entry_types, wildcard_type, is_rev_const, *args, **kwargs):
+        if not isinstance(wildcard_type, OneOfType) and not isinstance(wildcard_type, NoValueType):
+            raise ValueError()
         super(ListType, self).__init__(*args, **kwargs)
         # [ IntegerType, StringType ... ]
         self.entry_types = list(entry_types)
@@ -625,15 +666,17 @@ class ListType(CompositeType):
     def get_key_type(self, key):
         list_method_types = get_list_method_types()
         if key in list_method_types:
-            return list_method_types[key](self), False
+            return list_method_types[key](self)
         if not isinstance(key, int):
             raise InvalidDereferenceError()
-        if key < 0 and len(self.entry_types) > 0:
-            return NoType(), True
+#        if key < 0 and len(self.entry_types) > 0:
+#            return merge_types(self.entry_types + [ self.wildcard_type ])
+        if key < 0:
+            raise InvalidDereferenceError()
         elif 0 <= key < len(self.entry_types):
-            return self.entry_types[key], False
-        else:
-            return self.wildcard_type, True
+            return self.entry_types[key]
+        elif key >= len(self.entry_types):
+            return self.wildcard_type
 
     def get_keys_and_types(self):
         return list(enumerate(self.entry_types))
@@ -647,6 +690,8 @@ class ListType(CompositeType):
                 for index, entry_type in enumerate(self.entry_types)
             ]
             new_wildcard_type = self.wildcard_type.visit(visitor)
+            if not isinstance(new_wildcard_type, OneOfType) and not isinstance(new_wildcard_type, NoValueType):
+                self.wildcard_type.visit(visitor)
         else:
             new_entry_types = self.entry_types
             new_wildcard_type = self.wildcard_type
@@ -698,6 +743,9 @@ class FunctionType(Type):
         self.break_types = break_types
 
     def is_copyable_from(self, other, result_cache):
+        if isinstance(other, NoValueType):
+            return True
+
         if self is other:
             return True
 
@@ -734,6 +782,9 @@ class PythonFunction(Type):
         self.func = func
 
     def is_copyable_from(self, other, result_cache):
+        if isinstance(other, NoValueType):
+            return True
+
         return isinstance(other, PythonFunction)
 
     def __repr__(self):

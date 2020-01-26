@@ -1,0 +1,121 @@
+foo.bar = 123;
+
+1. Allow writing to defined fields:
+    a) foo: Object({ bar: Integer }) # Strong typed object
+    b) foo: Object({ bar: Any }) # Strong typed object
+2. Allow writing to undefined fields:
+    a) foo: Object({}, wildcard: OneOf<Integer, NoValue> }) # Dictionary
+    b) foo: Object({}, wildcard: OneOf<Any, NoValue> }) # Python like object
+    c) foo: Object({}, wildcard: Integer }) # Default Dictionary
+    d) foo: Object({}, wildcard: Any }) # Default Dictionary
+3. Block writing to fields with wrong type:
+    a) foo: Object({ bar: String }) # Strong typed object
+    b) foo: Object({}, wildcard: OneOf<String, NoValue>) # Strong typed Dictionary
+    b) foo: Object({}, wildcard: String) # Strong typed Default Dictionary
+4. Block writing to undefined fields - standard object type:
+    a) foo: Object({}, wildcard: NoValue) # Java like object
+5. Allow *sometimes* writing to undefined fields:
+    b) foo: Object({}, wildcard: NoType) # RDH style (half Java, half Python) object
+
+Integer baz = foo.bar;
+1. Allow reading from defined fields:
+    a) foo: Object({ bar: Integer }) # Strong typed object
+2. Allow reading from undefined fields:
+    a) foo: Object({}, wildcard: Integer) # Strong typed Default Dictionary
+3. Block reading from fields with wrong type:
+    a) foo: Object({ bar: String }) # Strong typed object
+    b) foo: Object({}, wildcard: String) # Strong typed default dict 
+4. Block reading from undefined fields:
+    a) foo: Object({}, wildcard: NoValue) # Java like object
+5. Allow *sometimes* reading from undefined fields
+    a) foo: Object({}, wildcard: NoType) # RDH style (half Java, half Python) object
+    a) foo: Object({}, wildcard: OneOfType<NoValue, Integer>) # Strong typed Dictionary
+
+Examples:
+## Object({ bar: Any }, NoValue) foo;
+✔ foo.bar = 1;
+✔ foo.bar = "hello";
+✔ foo.bar;
+✘ delete foo.bar;
+✘ foo.baz = 1;
+✘ foo.baz = "hello";
+✘ foo.baz;
+✘ delete foo.baz;
+## Object({ bar: Integer }) foo;
+✔ foo.bar = 1;
+✘ foo.bar = "hello";
+✔ foo.bar;
+✘ delete foo.bar;
+✘ foo.baz = 1;
+✘ foo.baz = "hello";
+✘ foo.baz;
+✘ delete foo.baz
+## Object({}, Any) foo;
+✔ foo.bar = 1;
+✔ foo.bar = "hello";
+✔ foo.bar;
+✘ delete foo.bar;
+✔ foo.baz = 1;
+✔ foo.baz = "hello";
+✔ foo.baz;
+✘ delete foo.baz
+## Object({}, Integer) foo;
+✔ foo.bar = 1;
+✘ foo.bar = "hello";
+✔ foo.bar;
+✘ delete foo.bar;
+✔ foo.baz = 1;
+✘ foo.baz = "hello";
+✔ foo.baz;
+✘ delete foo.baz
+## Object({}, NoType) foo;
+✘ foo.bar = 1;
+✘ foo.bar = "hello";
+✘ foo.bar;
+✘ delete foo.bar;
+✘ foo.baz = 1;
+✘ foo.baz = "hello";
+✘ foo.baz;
+✘ delete foo.baz
+## Object({}, NoValue) foo;
+✘ foo.bar = 1;
+✘ foo.bar = "hello";
+✘ foo.bar;
+✘ delete foo.bar;
+✘ foo.baz = 1;
+✘ foo.baz = "hello";
+✘ foo.baz;
+✘ delete foo.baz
+## Object({}, OneOfType<Any, NoValue>) foo;
+✔ foo.bar = 1;
+✔ foo.bar = "hello";
+✘ foo.bar;
+✔ delete foo.bar;
+✔ foo.baz = 1;
+✔ foo.baz = "hello";
+✘ foo.baz;
+✔ delete foo.baz
+## Object({}, OneOfType<Integer, NoValue>) foo;
+✔ foo.bar = 1;
+✘ foo.bar = "hello";
+✘ foo.bar;
+✘ delete foo.bar;
+✔ foo.baz = 1;
+✘ foo.baz = "hello";
+✘ foo.baz;
+✘ delete foo.baz
+
+
+foo[1] = 123;
+1. Allow writing to defined fields:
+    a) foo: ListTuple<String, Integer>
+    b) foo: ListTuple<String, Any>
+2. Allow writing to undefined fields:
+    a) foo: ListTuple<*OneOf<Integer, NoValue>>
+    b) foo: ListTuple<*OneOf<Any, NoValue>>
+3. Block writing to fields with wrong type:
+    a) foo: ListTuple<String, String>
+4. Block writing to undefined fields:
+    a) foo: ListTuple<*NoValue>
+5. Allow *sometimes* writing to undefined fields:
+    a) foo: ListTuple<*FixedOneOf<Integer, NoValue>>

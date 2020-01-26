@@ -3,7 +3,9 @@ from antlr4.InputStream import InputStream
 
 from parser.langLexer import langLexer
 from parser.langParser import langParser
+from rdhlang4.executor.test import TestMiscelaneous
 
+TestMiscelaneous
 
 def main():
     code = """{
